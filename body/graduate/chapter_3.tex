@@ -7,250 +7,153 @@
 自动驾驶等实时系统中尤为突出——车辆运行过程中持续产生传感器数据，直接应用标准 GPR
 难以满足在线更新的延时约束。稀疏高斯过程（Sparse Gaussian Process，SGP）通过引入一组
 数量远少于训练集的\textbf{诱导点}（inducing points）来近似完整的后验分布，将计算复杂度
-降低至可接受的范围。
+降低至可接受的范围。变分推断为稀疏高斯过程提供了严谨的理论基础。其核心思想是引入一个变分分
+布 $q(u)$ 来近似诱导点函数值 $u$ 的真实后验，并通过最大化证据下界（ELBO）来优化该分布。
+这一框架不仅将计算复杂度降至 $O(NM^2)$（$M$为诱导点数量），还能够提供在线学习的可能性。
 
-\subsection{稀疏高斯过程}
+\subsection{稀疏高斯过程的两个条件分布}
 
 设诱导输入集合 $Z = [z_1, z_2, \cdots, z_M]^\top \in \mathbb{R}^{M \times D}$，
 $M \ll N$，对应的诱导变量为
 \begin{equation}
     u = f(Z) = [f(z_1), f(z_2), \cdots, f(z_M)]^\top
 \end{equation}
-由高斯过程的定义，$(f(X), u)$ 服从联合高斯分布：
+由高斯过程的定义，$(f(X), u)$，$(f(x^*), u)$ 服从联合高斯分布：
 \begin{equation}
     \begin{pmatrix} f(X) \\ u \end{pmatrix} \sim \mathcal{N}
-    \left(0, \begin{bmatrix} K_{ff} & K_{fu} \\ K_{uf} & K_{uu} \end{bmatrix}\right)
+    \left(0, \begin{bmatrix} K_{ff} & K_{fu} \\ K_{uf} & K_{uu} \end{bmatrix}\right), \quad 
+    \begin{pmatrix} f(x^*) \\ u \end{pmatrix} \sim \mathcal{N}
+    \left(0, \begin{bmatrix} K_{**} & K_{*u} \\ K_{u*} & K_{uu} \end{bmatrix}\right)
 \end{equation}
-其中 $K_{fu} \in \mathbb{R}^{N \times M}$ 为训练点与诱导点之间的交叉协方差矩阵，
-$K_{uu} \in \mathbb{R}^{M \times M}$ 为诱导点之间的协方差矩阵。
-利用条件高斯公式，训练函数值在给定诱导变量 $u$ 条件下的分布为
+基于高斯过程的一致性，我们可以通过积分（边缘化）$u$联合分布$p(f^*, f, u)$恢复$p(f^*, f)$：
 \begin{equation}
-\label{equ:cond_f_u}
-    p(f(X) \mid u) = \mathcal{N}(K_{fu} K_{uu}^{-1} u,\ K_{ff} - Q_{ff})
+    p(f^*, f) = \int p(f^*, f, u) \mathrm{d}u, \quad p(u) = \mathcal N(0, K_{uu})
+\end{equation}
+这是精确的表达式，接下来我们介绍几乎所有稀疏方法采取的近似假设：\textbf{给定$u$的条件下$f$和$f^*$是条件独立的}。
+\begin{equation}
+    p(f^*, f) \approxeq q(^*, f) = \int q(f^* | u) q(f | u) p(u) \mathrm{d}u
+\end{equation}
+“诱导变量”这一名称的由来是：由于$f$和 $f^*$只能通过$u$进行信息传递，因此$u$起到了诱导训练案例与测试案例之间依赖关系的作用。
+
+
+利用条件高斯公式，训练函数值和测试函数值在给定诱导变量 $u$ 条件下的精确分布为
+\begin{equation} \label{eq:conditionals}
+\begin{aligned}
+    \text{训练条件（training conditional）}: &\quad p({f}|{u}) = \mathcal N \big (K_{f, u} K_{u, u}^{-1} u, 
+    K_{f, f} - Q_{f, f} \big ) \\
+    \text{测试条件（test conditional）}: &\quad p({f}_*|{u}) = \mathcal N \big (K_{*, u} K_{u, u}^{-1} u, 
+    K_{*, *} - Q_{*, *} \big )
+\end{aligned}
 \end{equation}
 其中 $Q_{ab} = K_{au} K_{uu}^{-1} K_{ub}$ 称为 Nyström 近似矩阵，刻画了由诱导点
 所能解释的函数值方差。$K_{ff} - Q_{ff}$ 为残差协方差，反映了诱导点无法捕捉的
 函数变化量。
 
-\subsubsection{FITC 近似}
+大部分的稀疏方法都可以看作是对这两个条件分布的不同近似方法，我们接下来便引入DTC和FITC。
 
-完全独立训练条件（Fully Independent Training Conditional，FITC）方法
-\cite{snelson2006}将式~\eqref{equ:cond_f_u} 中的残差协方差近似为对角矩阵，
-即假设在给定 $u$ 的条件下，各训练点的函数值相互独立：
+\subsection{DTC与FITC近似}
+
+\textbf{DTC}\cite{csato2002sparse}基于$f = K_{fu} K_{uu}^{-1} u$这一映射，将两个条件分布定义为：
 \begin{equation}
-    \tilde{p}_{\text{FITC}}(f(X) \mid u) =
-    \mathcal{N}(K_{fu} K_{uu}^{-1} u,\ \mathrm{diag}(K_{ff} - Q_{ff}))
+    q_{\mathrm{DTC}}(f|u)=\mathcal{N}(K_{f,u}K_{u,u}^{-1}{u},0),
+    \quad q_{\mathrm{DTC}}({f_{*}}|{u})=p({f_{*}}|{u})
 \end{equation}
-这一近似使得联合先验分解为
+DTC的近似之处在于其训练条件分布，给定$u$下，训练数据$f$是确定的，而其测试条件没有经过近似，是精确的。
+
+其预测分布为
 \begin{equation}
-    \tilde{p}_{\text{FITC}}(y, u) =
-    p(u) \prod_{i=1}^{n} p(y_i \mid u)
+    \begin{aligned}
+    q_{\text{DTC}}(f_* | y) &= \mathcal N \left (
+        Q_{*, f} (Q_{f, f} + \sigma^2 I)^{-1} y,
+        K_{*, *} - Q_{*, f} (Q_{f, f} + \sigma^2 I)^{-1} Q_{f, *}
+        \right ) \\
+        &= \mathcal N \left (
+            \sigma^{-2} K_{*, u} \Sigma K_{u, f} y,
+            K_{*, *} - Q_{*, *} + K_{*, u} \Sigma K_{u, *}
+            \right )
+    \end{aligned}
 \end{equation}
-其中每个似然项 $p(y_i \mid u)$ 独立地依赖于诱导变量。在此近似下，
-边缘似然具有封闭形式，可直接对核超参数和诱导点位置进行最大似然优化，
-其预测均值与标准 GPR 一致，而预测方差则通过对角修正项保留了部分局部不确定性信息。
+其中
+\begin{equation}
+    \Sigma = (\sigma^{-2} K_{u, f} K_{f, u} + K_{u, u})^{-1}
+\end{equation}
+此处我们使用了逆矩阵公式，将需要取逆的矩阵的维度从$\mathbb R^{N \times N}$降为了$\mathbb R^{M \times M}$：
+\begin{equation}
+    \begin{aligned}
+        (Q_{f, f} + \sigma^2 I)^{-1} 
+        &= (K_{{f, u}} K_{{u, u}}^{-1} K_{{u, f}} + \sigma^2 I)^{-1} \\
+        &\rightarrow \text{使用逆矩阵公式} \\
+        &= \sigma^{-2} I - \sigma^{-4} K_{{f, u}} (K_{{u, u}} + \sigma^{-2} K_{{u, f}} K_{{f, u}})^{-1} K_{{u, f}} \\
+        &= \sigma^{-2} I - \sigma^{-4} K_{{f, u}} \Sigma K_{{u, f}} \\
+        &\rightarrow \sigma^{-2} K_{{u, f}} K_{{f, u}} = \Sigma^{-1} - K_{{u, u}} \\
+        Q_{*, f} (Q_{f, f} + \sigma^2 I)^{-1}
+        &= \sigma^{-2} K_{{*, u}} K_{{u, u}}^{-1} K_{{u, f}} - \sigma^{-2} K_{{*, u}} K_{{u, u}}^{-1} (\Sigma^{-1} - K_{{u, u}}) \Sigma K_{{u, f}} \\
+        &= \sigma^{-2} K_{{*, u}} \Sigma K_{{u, f}}
+    \end{aligned}
+\end{equation}
 
-FITC 的主要局限在于对角近似破坏了训练点之间的相关结构，可能导致超参数估计产生
-偏差\cite{titsias2009}，且在诱导点数量较少时近似质量下降明显。
+\textbf{FITC}\cite{snelson2007local}则假设给定$u$的条件下，$f_i$彼此之间相互独立
+\begin{equation}
+    p(y | f) \simeq q(y | u) = \mathcal N \left ( 
+        K_{f, u} K_{u, u}^{-1} u, 
+        \mathrm{diag} [K_{f, f} - Q_{f, f}] + \sigma^2 I
+         \right )
+\end{equation}
+那么两个条件分布为：
+\begin{equation}
+    q_{\mathrm{FITC}}({f|u})
+    = \prod_{i=1}^{n} p(f_i | u)
+    =\mathcal{N}(K_{{f,u}}K_{{u,u}}^{-1}{u}, \mathrm{diag} [K_{f, f} - Q_{f, f}]),
+    \quad q_{\mathrm{FITC}}({f_{*}}|{\bf u})=p({f_{*}}|{\bf u})
+\end{equation}
 
-\subsubsection{VFE 近似}
+FITC并非直接忽略方差，而是通过引入额外的独立性假设来近似训练条件分布。其先验形式为（这里我们暂时只考虑单个测试样本的情况）：
+\begin{equation}
+    q_{\text{FITC}}(f, f_*) = \mathcal N \left ( 0, \begin{bmatrix}
+        Q_{f, f} + \mathrm{diag} [K_{f, f} - Q_{f, f}] & Q_{f, *} \\
+        Q_{*, f} & K_{*, *}
+    \end{bmatrix} \right )
+\end{equation}
 
-变分自由能（Variational Free Energy，VFE）方法由 Titsias \cite{titsias2009}
-提出，将稀疏近似纳入变分推断框架。与 FITC 不同，VFE 保留真实条件分布
-$p(f(X) \mid u)$，近似仅体现在对诱导变量后验 $p(u \mid y)$ 的变分处理上。
-通过最大化边缘似然的变分下界（ELBO）来联合优化变分参数、超参数与诱导点位置，
-使得近似误差有理论保证的上界。VFE 框架的完整推导见
-第~\ref{subsec:vi}~节。
-
-\subsubsection{FITC 与 VFE 的比较}
-
-FITC 与 VFE 在形式上存在密切联系：两者的预测均值相同，差异仅体现在
-对残差协方差的处理上。FITC 用对角矩阵 $\mathrm{diag}(K_{ff} - Q_{ff})$
-替代完整矩阵，而 VFE 在 ELBO 中以迹项 $\mathrm{tr}(K_{ff} - Q_{ff})$
-的形式对其进行惩罚。Bauer 等人\cite{bauer2016}从统一视角证明，
-FITC 可视为 VFE 在特定近似下的特例，但 FITC 的目标函数不是真实边缘似然
-的下界，缺乏 VFE 的理论保证。
-
-\begin{table}[htbp]
-\centering
-\caption{FITC 与 VFE 方法比较}
-\label{tab:fitc_vfe}
-\begin{tabular}{lcc}
-\toprule
-& \textbf{FITC} & \textbf{VFE} \\
-\midrule
-条件先验近似     & 对角化 $p(f \mid u)$         & 保留真实 $p(f \mid u)$       \\
-优化目标         & 近似边缘似然                  & ELBO（真实边缘似然下界）      \\
-理论保证         & 无                           & 有（KL 散度非负性）           \\
-超参数估计       & 可能过拟合                    & 有正则化效果                  \\
-计算复杂度       & $\mathcal{O}(nm^2)$          & $\mathcal{O}(nm^2)$          \\
-在线扩展性       & 较难                         & 自然（变分参数可增量更新）     \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-在在线学习场景中，VFE 因其变分参数具有明确的概率含义且支持增量式更新，
-更适合作为在线稀疏 GPR 的理论基础，本章后续内容均在 VFE 框架下展开。
-
+最终我们可以得到其预测公式：
+\begin{equation}
+    \begin{aligned}
+    q_{\text{FITC}}(f_* | y) &= \mathcal N \left (
+        Q_{*, f} (Q_{f, f} + \Lambda)^{-1} y,
+        K_{*, *} - Q_{*, f} (Q_{f, f} + \Lambda)^{-1} Q_{f, *}
+        \right ) \\
+        &= \mathcal N \left (
+            K_{*, u} \Sigma K_{u, f} \Lambda^{-1} y,
+            K_{*, *} - Q_{*, *} + K_{*, u} \Sigma K_{u, *}
+            \right )
+    \end{aligned}
+\end{equation}
+其中$\Sigma = (K_{u, f} \Lambda^{-1} K_{f, u} + K_{u, u})^{-1}$， 
+$\Lambda = \mathrm{diag} [K_{f, f} - Q_{f, f} + \sigma^2 I]$.
 
 \subsection{高斯过程的变分推断}
-\label{subsec:vi}
+上文基于直接的假设推导了DTC和FITC的预测公式，这缺乏一定的理论保证，因此我们从变分推断的角度，推导出DTC的
+公式（FITC同理），并基于此我们可以设计在线更新算法。
 
-变分推断（Variational Inference）通过在一族参数化分布中寻找与真实后验最接近的成员，
-将贝叶斯推断问题转化为优化问题。对于稀疏 GPR，变分推断作用于诱导变量 $u$ 上：
-引入变分分布 $q(u)$ 近似真实后验 $p(u \mid y)$，以最大化边缘似然下界为目标，
-联合优化变分参数、核超参数与诱导点位置。
-
-\subsubsection{变分下界的推导}
-
-引入诱导变量并对 $f(X)$ 进行积分，观测数据的边缘对数似然为
+设变分分布$q(u) = \mathcal N(m_u, S_u)$，变分后验为
 \begin{equation}
-\label{equ:log_marginal}
-    \log p(y \mid X) = \log \int p(y \mid u)\, p(u)\, \mathrm{d}u
-\end{equation}
-其中边缘似然项
-\begin{equation}
-    p(y \mid u) = \int p(y \mid f(X))\, p(f(X) \mid u)\, \mathrm{d}f(X)
-    = \mathcal{N}(y;\, K_{fu} K_{uu}^{-1} u,\, \sigma_n^2 I + K_{ff} - Q_{ff})
-\end{equation}
-由于 $p(u \mid y)$ 不具有解析形式，引入变分分布
-$q(u) = \mathcal{N}(u;\, \mathbf{m}, S)$，其中均值向量 $\mathbf{m} \in \mathbb{R}^m$
-与正定协方差矩阵 $S \in \mathbb{R}^{m \times m}$ 为待优化的变分参数。
-对式~\eqref{equ:log_marginal} 应用 Jensen 不等式：
-\begin{equation}
-\begin{aligned}
-    \log p(y \mid X)
-    &= \log \int \frac{p(y \mid u)\, p(u)}{q(u)} q(u)\, \mathrm{d}u \\
-    &\geq \int q(u) \log \frac{p(y \mid u)\, p(u)}{q(u)}\, \mathrm{d}u \\
-    &= \underbrace{\mathbb{E}_{q(u)}[\log p(y \mid u)]}_{\text{期望对数似然}}
-     - \underbrace{\mathrm{KL}[q(u) \| p(u)]}_{\text{KL 散度}} \\
-    &\triangleq \mathcal{L}(\mathbf{m}, S, \theta, Z)
-\end{aligned}
+    q(f, u) = p(f | u) q(u)
 \end{equation}
 
-\subsubsection{期望对数似然的计算}
-
-由于 $p(y \mid u)$ 为高斯分布，期望对数似然可以解析计算。
-令 $A = K_{fu} K_{uu}^{-1}$，$\Lambda = \sigma_n^2 I + K_{ff} - Q_{ff}$，则
+在变分推断的框架下，我们需要最大化对数边缘似然$\log p(y)$，并由此引入证据下界和$q(u)$和$p(u)$之间的
+KL散度。
 \begin{equation}
-\begin{aligned}
-    \mathbb{E}_{q(u)}[\log p(y \mid u)]
-    &= \mathbb{E}_{q(u)}\left[
-        -\frac{n}{2}\log 2\pi - \frac{1}{2}\log|\Lambda|
-        - \frac{1}{2}(y - Au)^\top \Lambda^{-1}(y - Au)
-      \right] \\
-    &= -\frac{n}{2}\log 2\pi - \frac{1}{2}\log|\sigma_n^2 I + Q_{ff}|
-       - \frac{1}{2}(y - A\mathbf{m})^\top (\sigma_n^2 I + Q_{ff})^{-1} (y - A\mathbf{m}) \\
-    &\quad - \frac{1}{2\sigma_n^2}\mathrm{tr}(K_{ff} - Q_{ff})
-       - \frac{1}{2\sigma_n^2}\mathrm{tr}(K_{uu}^{-1} S \cdot K_{uu}^{-1} Q_{ff}) \\
-    &= \log \mathcal{N}(y;\, A\mathbf{m},\, \sigma_n^2 I + Q_{ff})
-       - \frac{1}{2\sigma_n^2}\mathrm{tr}(K_{ff} - Q_{ff})
-       - \frac{1}{2\sigma_n^2}\mathrm{tr}(K_{uu}^{-1} S K_{uu}^{-1} Q_{ff})
-\end{aligned}
+    \begin{aligned}
+        \log p(y) &= \log \iint p(y, f, u) df du \\
+        &= \log \iint p(y, f, u) \frac{q(f, u)}{q(f, u)} df du \\
+        &= \log \iint q(f, u) \frac{p(y, f, u)}{q(f, u)} df du \\
+        &= \log \mathbb E_{q(f, u)} \left [ \frac{p(y, f, u)}{q(f, u)} \right ] \\
+        &\geq \mathbb E_{q(f, u)} \left [ \log \frac{p(y, f, u)}{q(f, u)} \right ] \quad \text{(Jensen不等式)} \\
+        &= \mathbb E_{q(f, u)} \left [ \log \frac{p(y|f, u)p(f, u)}{p(f|u)q(u)} \right ] \\
+        &= \mathbb E_{q(f, u)} \left [ \log \frac{p(y|f)p(f|u)p(u)}{p(f|u)q(u)} \right ] \\
+        &= \mathbb E_{q(f, u)} \left [ \log \frac{p(y|f)p(u)}{q(u)} \right ] \\
+        &= \mathbb E_{q(f, u)} \left [ \log p(y|f) \right ] - \mathbb E_{q(f, u)} \left [ \log \frac{q(u)}{p(u)} \right ] \\
+        &= \mathbb E_{q(f, u)} \left [ \log p(y|f) \right ] - \text{KL} \left [q(u) || p(u) \right ]
+    \end{aligned}
 \end{equation}
-其中第三项 $\mathrm{tr}(K_{ff} - Q_{ff}) \geq 0$ 为 Nyström 近似的残差迹，
-反映了诱导点未能捕捉的函数方差总量；第四项则衡量变分协方差 $S$ 与先验 $K_{uu}$
-之间的偏差对预测不确定性的贡献。
-
-\subsubsection{KL 散度的展开}
-
-两个高斯分布之间的 KL 散度具有封闭形式。对于
-$q(u) = \mathcal{N}(\mathbf{m}, S)$ 和先验 $p(u) = \mathcal{N}(0, K_{uu})$：
-\begin{equation}
-\label{equ:kl}
-    \mathrm{KL}[q(u) \| p(u)]
-    = \frac{1}{2}\left[
-        \mathrm{tr}(K_{uu}^{-1} S)
-        + \mathbf{m}^\top K_{uu}^{-1} \mathbf{m}
-        - m
-        + \log\frac{|K_{uu}|}{|S|}
-    \right]
-\end{equation}
-KL 散度惩罚变分分布偏离先验的程度，起到隐式正则化的作用，
-防止模型在诱导点处过拟合训练数据。
-
-\subsubsection{完整 ELBO}
-
-综合以上各项，完整的变分下界为
-\begin{equation}
-\label{equ:elbo_full}
-\begin{aligned}
-    \mathcal{L} =\ &\log \mathcal{N}(y;\, K_{fu} K_{uu}^{-1} \mathbf{m},\,
-                     \sigma_n^2 I + Q_{ff}) \\
-    &- \frac{1}{2\sigma_n^2}\mathrm{tr}(K_{ff} - Q_{ff})
-     - \frac{1}{2\sigma_n^2}\mathrm{tr}(K_{uu}^{-1} S K_{uu}^{-1} Q_{ff}) \\
-    &- \frac{1}{2}\left[
-        \mathrm{tr}(K_{uu}^{-1} S)
-        + \mathbf{m}^\top K_{uu}^{-1} \mathbf{m}
-        - m
-        + \log\frac{|K_{uu}|}{|S|}
-      \right]
-\end{aligned}
-\end{equation}
-式~\eqref{equ:elbo_full} 关于 $\mathbf{m}$、$S$、超参数 $\theta$ 以及
-诱导点位置 $Z$ 均可微，适合基于梯度的联合优化。
-
-\subsubsection{最优变分参数}
-
-对 $\mathbf{m}$ 和 $S$ 令 $\partial \mathcal{L} / \partial \mathbf{m} = 0$
-与 $\partial \mathcal{L} / \partial S^{-1} = 0$，得到解析最优解\cite{titsias2009}：
-\begin{equation}
-\label{equ:opt_var}
-\begin{aligned}
-    S^* &= \sigma_n^2 \left(K_{uu} + \sigma_n^{-2} K_{uf} K_{fu}\right)^{-1} K_{uu} \\
-    \mathbf{m}^* &= \frac{1}{\sigma_n^2} K_{uu}
-        \left(K_{uu} + \sigma_n^{-2} K_{uf} K_{fu}\right)^{-1} K_{uf} y
-\end{aligned}
-\end{equation}
-将 $S^*$、$\mathbf{m}^*$ 代入 ELBO，最大化 $\mathcal{L}$ 等价于最大化
-\begin{equation}
-    \mathcal{L}^* = \log \mathcal{N}(y;\, 0,\, \sigma_n^2 I + Q_{ff})
-    - \frac{1}{2\sigma_n^2} \mathrm{tr}(K_{ff} - Q_{ff})
-\end{equation}
-其中第二项 $\mathrm{tr}(K_{ff} - Q_{ff})$ 为惩罚项，驱动诱导点向能最大程度
-减小 Nyström 近似误差的位置移动，防止诱导点聚集退化。
-
-\subsubsection{稀疏后验预测}
-
-将最优变分参数代入后验预测，对测试点 $x^*$ 的近似预测分布为
-\begin{equation}
-\label{equ:sgpr_pred}
-\begin{aligned}
-    q(f^*) &= \int p(f^* \mid u)\, q(u)\, \mathrm{d}u
-    = \mathcal{N}(f^*;\, \mu_*^{\mathrm{s}},\, {\sigma_*^{\mathrm{s}}}^2) \\[4pt]
-    \mu_*^{\mathrm{s}} &= K_{*u} K_{uu}^{-1} \mathbf{m}^* \\
-    {\sigma_*^{\mathrm{s}}}^2 &= K_{**}
-        - K_{*u}\!\left(K_{uu}^{-1} - K_{uu}^{-1} S^* K_{uu}^{-1}\right)\!K_{u*}
-\end{aligned}
-\end{equation}
-与标准 GPR 的式~\eqref{equ:gpr_intro2} 相比，式~\eqref{equ:sgpr_pred}
-将所有矩阵运算的规模从 $n \times n$ 压缩至 $m \times m$，
-计算复杂度由 $\mathcal{O}(n^3)$ 降低至 $\mathcal{O}(nm^2)$，
-存储复杂度由 $\mathcal{O}(n^2)$ 降低至 $\mathcal{O}(nm)$。
-
-\subsubsection{面向在线学习的变分参数结构}
-
-注意到最优变分参数 $(\mathbf{m}^*, S^*)$ 具有自然的递推结构：
-当新观测 $(x_{n+1}, y_{n+1})$ 到来时，仅需对
-$K_{uf} K_{fu}$ 和 $K_{uf} y$ 两个统计量进行增量更新，
-而无需重新处理全部历史数据。具体地，定义自然参数
-\begin{equation}
-\label{equ:natural_params}
-    \eta_1 = \sigma_n^{-2} K_{uf} y, \qquad
-    \eta_2 = \sigma_n^{-2} K_{uf} K_{fu}
-\end{equation}
-则式~\eqref{equ:opt_var} 可改写为
-\begin{equation}
-    S^* = (K_{uu}^{-1} + \eta_2)^{-1}, \qquad
-    \mathbf{m}^* = S^* \eta_1
-\end{equation}
-当新数据点到来时，$\eta_1$ 与 $\eta_2$ 的更新为
-\begin{equation}
-\label{equ:natural_update}
-    \eta_1 \leftarrow \eta_1 + \sigma_n^{-2} k_{u,n+1}\, y_{n+1}, \qquad
-    \eta_2 \leftarrow \eta_2 + \sigma_n^{-2} k_{u,n+1}\, k_{u,n+1}^\top
-\end{equation}
-其中 $k_{u,n+1} = K_{uu}^{-1} k(Z, x_{n+1})$ 为新样本与诱导点之间的
-核向量。式~\eqref{equ:natural_update} 每步的计算复杂度仅为 $\mathcal{O}(m^2)$，
-为在线稀疏高斯过程回归的高效实现奠定了基础，诱导点集合 $Z$ 的在线维护策略
-将在第~\ref{sec:online_sgpr}~节详细讨论。
+显然，最大化边缘似然就是最小化$q(u)$和$p(u)$之间的KL散度。

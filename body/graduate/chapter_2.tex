@@ -352,7 +352,7 @@ $\mathcal{X}$ 和 $\mathcal{U}$ 分别为状态约束集和控制输入约束集
 设训练数据集为 
 $\mathcal{D} = \{ (x_i, y_i) \}_{i=1}^N$，$y_i = f(x_i) + \epsilon_i, \epsilon_i \sim \mathcal N(0, \sigma_n^2)$。
 GPR 假设函数值 $f(x)$ 在每个输入点 $x$ 上服从高斯分布，
-并通过协方差矩阵 $K$ 描述点间相关性。设$X = [x_1, x_2, \cdots, x_n]^\top, y = [y_1, y_2, \cdots, y_n]^\top$：
+并通过协方差矩阵 $K$ 描述点间相关性。设$X = [x_1, x_2, \cdots, x_N]^\top \in \mathbb R ^{N \times D}, y = [y_1, y_2, \cdots, y_N]^\top$：
 \begin{equation}
     f(X) = [f(x_1), f(x_2), \cdots, f(x_n)]^\top \sim \mathcal N(0, K)
 \end{equation}
@@ -390,7 +390,7 @@ $y \sim \mathcal N(0, K + \sigma_n^2 I)$。
         b | a & \sim \mathcal N (\mu_b + C^\top A^{-1} (a - \mu_a), B - C^\top A^{-1} C)
     \end{aligned}
 \end{equation}
-我们可以得到
+我们可以得到高斯过程回归的预测公式
 \begin{equation}
 \label{equ:gpr_intro2}
 \begin{aligned}
