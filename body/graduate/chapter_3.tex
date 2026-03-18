@@ -285,7 +285,7 @@ KL散度。
 \end{aligned}
 \end{equation}
 我们便可以得到预测分布
-\begin{equation}
+\begin{equation} \label{equ:mu_su_predictive}
     \begin{aligned}
         q(f_* | y) &= \int p(f_* | u) q(u) du \\
         &= \mathcal N (K_{*u} K_{uu}^{-1} m_u, K_{**} - Q_{**} + K_{*u} K_{uu}^{-1} S_u K_{uu}^{-1} K_{u*}) \\
@@ -293,6 +293,124 @@ KL散度。
     \end{aligned}
 \end{equation}
 
-这跟我们推导的DTC的\autoref{equ:DTC_pred}一模一样，但是我们得到了ELBO得到的理论下界保证。
+这跟我们推导的DTC的\autoref{equ:DTC_pred}一模一样，但是我们得到了ELBO得到的理论下界保证。同理在FITC的框架下，
+诱导变量的变分分布是
+\begin{equation}
+    \begin{aligned}
+        m_u &= K_{uu} \Sigma K_{uf} \Lambda^{-1} y \\
+        S_u &= K_{uu} \Sigma K_{uu}
+    \end{aligned}
+\end{equation}
+其中
+\begin{equation}
+    \Sigma = (K_{uf} \Lambda^{-1} K_{fu} + K_{uu})^{-1}, \quad \Lambda = \text{diag}(K_{ff} - Q_{ff} + \sigma^2)
+\end{equation}
 
 \section{在线更新算法}
+
+在许多实际应用场景中，数据通常以流式（streaming）的形式不断到达，传统的批处理（batch）推断方法需要反复在全量数据
+上进行优化，计算代价较高且难以满足实时性需求。因此，有必要设计能够随数据逐步更新的在线推断算法。
+
+本节围绕变分推断框架，讨论模型在新数据到达时的更新策略，根据是否需要扩充诱导变量及其分布分为非增量和增量更新算法。
+
+\subsection{变分分布的非增量更新}
+
+在$k-1$时刻，我们有变分分布$q(u) = \mathcal N (m_{k-1}, S_{k-1})$，在$k$时刻我们得到了一个新的数据点
+$(x_k, y_k)$，$p(y_k | u) = \mathcal N(K_{f_k u} K_{uu}^{-1}u, \sigma^2)$，$u$在$y_k$下的条件概率（后验）为
+\begin{equation}
+    q(u|y_k) = \frac{q(y_k|u)q(u)}{p(y_k)} \propto q(y_k|u)q(u)
+\end{equation}
+取负对数
+\begin{equation}
+    \begin{aligned}
+        - \log q(y_k|u)q(u)
+        &= \frac{1}{2} (u - m_{k-1})^T S_{k-1}^{-1} (u - m_{k-1}) + \frac{1}{2\sigma^2} (y_k - K_{f_ku} K_{uu}^{-1} u)^2 + \text{常量} \\
+        &\rightarrow \text{只保留依赖于} u \text{的项} \\
+        &= \frac{1}{2} u^T (S_{k-1}^{-1} + \sigma^{-2} K_{u u}^{-1} K_{uf_k} K_{f_ku} K_{uu}^{-1}) u \\
+        &- (S_{k-1}^{-1} m_{k-1} + \sigma^{-2} K_{uu}^{-1} K_{uf_k} y_k) u \\
+        &= \frac{1}{2} u^T A u - b^T u + \text{常量} \\
+        &= \frac{1}{2} (u - A^{-1} b)^T A (u - A^{-1} b) + \text{常量}
+    \end{aligned}
+\end{equation}
+这个后验是一个指数二次型，这必然是一个高斯分布，于是我们得到后验分布$q(u|y_k) = \mathcal N(m_k, S_k)$：
+\begin{equation}    
+    \begin{aligned}
+        S_k &= A^{-1} =  (S_{k-1}^{-1} + \sigma^{-2} K_{u u}^{-1} K_{u f_k} K_{f_k u} K_{u u}^{-1})^{-1} \\
+        m_k &= A^{-1}b = S_k (S_{k-1}^{-1} m_{k-1} + \sigma^{-2} K_{u u}^{-1} K_{u f_k} y_k)
+    \end{aligned}   
+\end{equation}
+我们可以使用逆矩阵定理处理这个逆：
+\begin{equation}
+    S_k = S_{k-1} - S_{k-1} K_{u u}^{-1} K_{u f_k} (\sigma^2 + K_{f_k u} K_{u u}^{-1} S_{k-1} K_{u u}^{-1} K_{u f_k})^{-1} K_{f_k u} K_{u u}^{-1} S_{k-1}
+\end{equation}
+
+这是一个贝叶斯更新步骤，我们可以将整个更新方案写成一个类似卡尔曼滤波的形式，定义$\phi_k = K_{f_k u} K_{uu}^{-1}$，那么
+$y_k = \phi_k u + \epsilon, \quad \epsilon \sim \mathcal N(0, \sigma^2)$
+\begin{equation}
+    \begin{aligned}
+        & r_k = y_k - \Phi_k m_{k-1} \\
+        & s_k = \sigma^2 + \Phi_k S_{k-1} \Phi_k^T \\
+        & K_k = S_{k-1} \Phi_k^T s_k^{-1} \\
+        & m_k = m_{k-1} + K_k r_k \\
+        & S_k = S_{k-1} - K_k \phi_k S_{k-1}
+    \end{aligned}
+\end{equation}
+第一项是残差，第二项是预测方差，第三项是增益。
+
+\subsection{变分分布的增量更新}
+
+在标准的变分稀疏高斯过程回归中，若仅对变分分布进行非增量更新，则诱导点的位置保持不变，仅对其对应的变分均值与协方差进行调整。
+在这种情况下，模型的表达能力受限于已有诱导点在输入空间中的分布范围。
+
+当测试输入 $x^*$ 位于训练数据及诱导点未充分覆盖的区域时，由于缺乏有效的支撑信息，高斯过程的后验预测将逐渐退化为其先验分布，
+即回归到先验均值 $m(x^*)$，同时伴随较大的不确定性。这种现象表明，固定诱导点位置的变分更新机制在面对输入分布扩展或新区域数据时，
+难以提供准确的预测结果。
+
+为了解决上述问题，有必要对变分分布进行增量扩展，在保留已有统计信息的基础上，引入新的诱导点以覆盖新的输入区域，从而提升模型在未
+见区域的泛化能力与预测精度。
+
+观察\autoref{equ:mu_su_predictive}我们发现，增加诱导变量会导致标准稀疏高斯过程预测分布的$K_{u u}$， $K_{u f}$这两项变化，
+需要更新，从变分推断的角度则需要更新$K_{u u}$，$m_u$，$S_u$。
+
+设新诱导点为$u_{n}$，原有诱导点为$u_{o}$，$K_{u f}$的更新比较简单：
+\begin{equation}
+    K_{u f} = \begin{bmatrix}
+        K_{u_o f} \\
+        K_{u_n f}
+    \end{bmatrix}
+\end{equation}
+
+$K_{u u}$则并不会直接更新，而是更新对应的Cholesky分解矩阵$L_{u u}$，令
+\begin{equation}
+    C = L_{u_o u_o}^{-1} K_{u_o u_n}, \quad D = \sqrt{K_{u_n u_n} - C^\top C}
+\end{equation}
+则
+\begin{equation}
+    L_{u u} = \begin{bmatrix}
+        L_{u_o u_o} & 0 \\
+        C^\top & D
+    \end{bmatrix}
+\end{equation}
+
+$m_u$的更新方法为
+\begin{equation}
+    m_u = \begin{bmatrix}
+        m_{u_o} \\
+        (L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n})^\top m_{u_o}
+    \end{bmatrix}
+\end{equation}
+
+$S_u$的更新方法为
+\begin{equation}
+    S_u = \begin{bmatrix}
+        S_{u_o} & (S_{u_o} L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n})^\top \\
+        S_{u_o} L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n} & S_{n n}
+    \end{bmatrix}
+\end{equation}
+其中
+\begin{equation}
+    S_{n n} = K_{u_n u_n} - (L_{u_o u_o}^{-1} K_{u_o u_n})^\top (L_{u_o u_o}^{-1} K_{u_o u_n}) + 
+    (L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n})^\top S_{u_o} (L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n})
+\end{equation}
+
+上面再写点怎么推导得来的

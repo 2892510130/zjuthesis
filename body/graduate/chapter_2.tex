@@ -499,6 +499,26 @@ K_y = K_{ff} + \sigma_n^2 I
 该过程在平衡模型复杂度和数据拟合能力方面具有天然优势，
 从而避免过拟合问题。
 
+\subsection{数值优化方法}
+
+可以看到在高斯过程回归的公式中我们需要对矩阵$K_y$求逆，直接求逆是比较耗时的，由于$K_y$矩阵的对称性，我们
+可以使用Cholesky\cite{Wikipedia_Cholesky}分解法。
+由
+\begin{equation}
+    K_y = L L^\top 
+\end{equation}
+得到
+\begin{equation}
+    K_y^{-1} b = L^{-\top} L^{-1} b
+\end{equation}
+
+除此以外在高斯过程回归中常用Woodbury\cite{Wikipedia_Woodbury}技巧，$S \in \mathbb R^{N \times N}, \Phi \in \mathbb R^{D \times N}$
+\begin{equation}
+    (\sigma^2 I + \Phi S \Phi^\top)^{-1} = \sigma^{-2} I - \sigma^{-2} \Phi (S^{-1} + \sigma^{-2} \Phi^\top \Phi)^{-1}
+    \Phi^\top \sigma^{-2}
+\end{equation}
+在已经有$S^{-1}$并且$N \ll D$的情况下更高效。
+
 \subsection{高斯过程回归的优势}
 GPR 在工程应用中具备若干显著优势。首先，它能够在小样本条件下实现有效学习——由于高斯过程先验编码了函数的平滑性假设，在训练数据有
 限时仍可给出合理的插值与外推预测，而非陷入过拟合。其次，作为贝叶斯方法，GPR 输出的不仅是点预测，还包含完整的后验不确定性估计：
