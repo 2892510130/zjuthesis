@@ -355,7 +355,45 @@ $y_k = \phi_k u + \epsilon, \quad \epsilon \sim \mathcal N(0, \sigma^2)$
         & S_k = S_{k-1} - K_k \phi_k S_{k-1}
     \end{aligned}
 \end{equation}
-第一项是残差，第二项是预测方差，第三项是增益。
+第一项是残差，第二项是预测方差，第三项是增益。总结一下即为\autoref{alg:online_vsgp_update}。
+
+\begin{algorithm}[htbp]
+    \caption{在线变分稀疏高斯过程更新}
+    \label{alg:online_vsgp_update}
+    \begin{algorithmic}[1]
+        \Require 
+        \Statex 上一时刻变分分布参数：均值 $m_{k-1}$，协方差 $S_{k-1}$
+        \Statex 诱导点协方差矩阵 $K_{uu}$（固定）
+        \Statex 新观测数据点 $(x_k, y_k)$
+        \Statex 观测噪声方差 $\sigma^2$
+        \Statex 核函数 $k(\cdot, \cdot)$
+        
+        \Function{OnlineUpdate}{$m_{k-1}$, $S_{k-1}$, $K_{uu}$, $x_k$, $y_k$, $\sigma^2$}
+        
+            \State \textbf{步骤1}: 计算核向量
+            \State $K_{f_k u} \gets [k(x_k, u_1), k(x_k, u_2), \ldots, k(x_k, u_M)]$ \Comment{$M$为诱导点个数}
+            
+            \State \textbf{步骤2}: 计算线性化观测矩阵
+            \State $\phi_k \gets K_{f_k u} K_{uu}^{-1}$ \Comment{将观测映射到诱导点空间}
+            
+            \State \textbf{步骤3}: 计算预测
+            \State $\hat{y}_k \gets \phi_k m_{k-1}$ \Comment{预测观测值}
+            \State $r_k \gets y_k - \hat{y}_k$ \Comment{残差（新息）}
+            
+            \State \textbf{步骤4}: 计算预测方差
+            \State $s_k \gets \sigma^2 + \phi_k S_{k-1} \phi_k^\top$ \Comment{标量预测方差}
+            
+            \State \textbf{步骤5}: 计算增益
+            \State $K_k \gets S_{k-1} \phi_k^\top s_k^{-1}$ \Comment{增益向量}
+            
+            \State \textbf{步骤6}: 更新后验分布
+            \State $m_k \gets m_{k-1} + K_k r_k$ \Comment{更新均值}
+            \State $S_k \gets S_{k-1} - K_k \phi_k S_{k-1}$ \Comment{更新协方差}
+            
+            \State \textbf{return} $m_k$, $S_k$
+        \EndFunction
+    \end{algorithmic}
+\end{algorithm}
 
 \subsection{变分分布的增量更新}
 
@@ -413,4 +451,140 @@ $S_u$的更新方法为
     (L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n})^\top S_{u_o} (L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n})
 \end{equation}
 
-上面再写点怎么推导得来的
+这是由$u_n = K_{u_n u_o} K_{u_o u_o}^{-1} S_{u_o}$得来的，我们将上述增量更新方法记为\autoref{alg:add_new_inducing}。
+
+\begin{algorithm}[htbp]
+    \caption{诱导点增量更新}
+    \label{alg:add_new_inducing}
+    \begin{algorithmic}[1]
+        \Require 
+        \Statex 新诱导变量$u_o$及其协方差矩阵的分解矩阵$L_{u_o u_o}$
+        \Statex 新旧诱导点间的协方差$K_{u_o u_n}$，新诱导点自身的协方差$K_{u_n u_n}$
+        \Statex 旧变分分布参数：均值 $m_{u_o}$，协方差 $S_{u_o}$
+
+        \Function{AddNewInducing}{$u_n$, $L_{u_o u_o}$, $K_{u_o u_n}$, $K_{u_n u_n}$, $m_{u_o}$, $S_{u_o}$}
+            
+            \State \textbf{步骤1}: 计算中间矩阵C和D
+            \State $C \gets L_{u_o u_o}^{-1} K_{u_o u_n}$
+            \State $D \gets \sqrt{K_{u_n u_n} - C^\top C}$
+            
+            \State \textbf{步骤2}: 更新Cholesky因子$L_{uu}$
+            \State $L_{uu} \gets \begin{bmatrix} L_{u_o u_o} & 0 \\ C^\top & D \end{bmatrix}$
+            
+            \State \textbf{步骤3}: 更新均值$m_u$
+            \State $T \gets L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n}$ \Comment{临时变量}
+            \State $m_u \gets \begin{bmatrix} m_{u_o} \\ T^\top m_{u_o} \end{bmatrix}$
+            
+            \State \textbf{步骤4}: 更新协方差$S_u$的右下块$S_{nn}$
+            \State $A \gets L_{u_o u_o}^{-1} K_{u_o u_n}$ \Comment{临时变量}
+            \State $S_{nn} \gets K_{u_n u_n} - A^\top A + T^\top S_{u_o} T$
+            
+            \State \textbf{步骤5}: 组装完整的$S_u$矩阵
+            \State $S_{u_o u_n} \gets S_{u_o} T$
+            \State $S_u \gets \begin{bmatrix} S_{u_o} & S_{u_o u_n}^\top \\ S_{u_o u_n} & S_{nn} \end{bmatrix}$
+            
+            \State \textbf{return} $L_{uu}$, $m_u$, $S_u$
+        \EndFunction
+    \end{algorithmic}
+\end{algorithm}
+
+\section{实验数据和分析}
+% 1. 数据集选择
+
+%     回归基准数据集：选用UCI机器学习库中的经典回归数据集（如Boston Housing、Concrete Strength、Energy Efficiency等），这些数据集规模适中，便于与现有方法对比。
+
+%     时间序列/流式数据：若强调在线特性，可选用具有时间顺序的数据集，例如空气质量监测、气象数据、电力负荷预测等，模拟数据流式到达。
+
+%     合成数据：生成具有已知函数形式的数据（如正弦波、多项式加噪声），便于评估模型对真实函数的逼近能力，尤其是在未观测区域的外推表现。
+
+%     自动驾驶相关数据：如果章节背景与自动驾驶相关，可使用KITTI、nuScenes等数据集中的传感器测量任务（如距离估计、路径预测），体现方法在目标领域的实用性。
+
+% 2. 对比方法
+
+%     标准高斯过程回归：作为黄金标准，但仅适用于小规模数据，可用于验证稀疏近似的准确性。
+
+%     批处理稀疏高斯过程：如DTC、FITC、VFE（变分自由能）等，用于对比在线更新与重训练的计算开销与性能差异。
+
+%     其他在线高斯过程方法：例如在线高斯过程回归（OGP）、基于随机特征扩展的在线GP、朴素在线变分GP（固定诱导点），用以凸显本文增量更新策略的优势。
+
+%     朴素在线稀疏GP（非增量更新）：即不添加新诱导点，仅更新变分分布，以此验证增量扩展的必要性。
+
+% 3. 评估指标
+
+%     预测精度：
+
+%         均方根误差（RMSE）
+
+%         平均绝对误差（MAE）
+
+%         测试集负对数似然（NLL），反映不确定性估计质量
+
+%     计算效率：
+
+%         单次更新时间（ms）
+
+%         累积更新时间（随数据量增长）
+
+%         测试时间（单个样本的预测耗时）
+
+%     内存占用：存储核矩阵及变分参数所需内存（MB）
+
+%     模型复杂度：诱导点数量 $M$ 对性能的影响曲线
+
+% 4. 实验设置
+
+%     诱导点初始化：可随机选择、K-means聚类或基于数据分布选取，并固定或随更新调整。
+
+%     核函数与超参数：常用RBF核，超参数可通过初始数据预训练或在线边际似然优化调整。需说明超参数更新策略（如固定或每N步更新一次）。
+
+%     数据流模拟：将数据集随机打乱或按时间顺序逐点（或小批量）送入模型，模拟在线到达场景。
+
+%     重复实验：为减少随机性影响，每个实验应重复10次以上并报告均值和标准差。
+
+% 5. 实验结果与分析建议
+
+%     预测性能对比：
+
+%         绘制RMSE/NLL随观测数据量增加的演化曲线，展示在线模型如何逐步改进。
+
+%         对比不同方法在相同数据量下的最终预测误差，验证稀疏近似与在线更新的有效性。
+
+%     计算时间分析：
+
+%         展示累积更新时间随数据量的增长趋势，证明$\mathcal{O}(NM^2)$的复杂度优势。
+
+%         对比批处理重训练与在线更新的单次耗时，突显在线更新的实时性。
+
+%     诱导点增量扩展的效果：
+
+%         设计实验使数据分布随时间漂移（如先采集区域A，后采集区域B），比较固定诱导点与增量扩展诱导点在区域B上的预测误差。
+
+%         可视化诱导点位置的变化，说明其如何覆盖新输入空间。
+
+%     不确定性评估：
+
+%         绘制预测置信区间与真实值的覆盖概率（如95%区间覆盖率），验证不确定性估计的可靠性。
+
+%     参数敏感性分析：
+
+%         改变诱导点数量 $M$，观察RMSE与计算时间的变化，为实际应用提供选择指导。
+
+%     消融实验：分别移除“增量更新”和“变分分布更新”组件，验证各自对性能的贡献。
+
+% 6. 结果可视化示例
+
+%     预测曲线：在合成数据上绘制真实函数、观测点、预测均值和2倍标准差带，直观展示拟合效果。
+
+%     误差箱线图：对比不同方法在多个数据集上的RMSE分布。
+
+%     时间-误差散点图：以时间为横轴，累积误差为纵轴，展现长期预测稳定性。
+
+%     诱导点分布图：在2D输入空间中用散点表示诱导点位置，辅以数据点分布，说明覆盖情况。
+
+% 7. 讨论与结论
+
+%     总结所提方法在准确性、速度和内存方面的权衡。
+
+%     分析何时增量扩展是必要的，何时非增量更新已足够。
+
+%     指出方法的局限性（如诱导点数量需预设、核超参数固定等），并提出未来改进方向。
