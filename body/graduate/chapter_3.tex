@@ -1,5 +1,18 @@
 \chapter{在线稀疏高斯过程回归}
 
+\section{引言}
+
+标准高斯过程回归在理论上具有完备的贝叶斯推断框架与良好的不确定性量化能力，然而其计算复杂度随训练数据量呈三次方增长，推断阶段的
+存储与时间开销均难以满足在线学习场景的实时性需求。与此同时，移动机器人在连续运行过程中所积累的观测数据具有流式、增量的特点，
+标准 GP 每次接收新数据后须对全量历史数据重新求解，这使其在实际部署中几乎不具备可扩展性。上述局限促使研究者转向稀疏近似与在线
+推断方向，以在可接受的计算代价内保留 GP 的核心优势。
+
+本章针对轨迹跟踪控制中残差动力学的在线建模需求，提出一种面向在线学习的稀疏高斯过程回归算法。算法以变分推断为理论基础，通过诱导
+点处的变分均值与协方差作为模型的充分统计量，将完整数据集的推断问题转化为低维变分参数的优化问题；在此基础上，设计支持增量更新的
+变分参数递推机制，使模型能够随新观测数据持续修正后验估计而无需访问历史数据；进一步引入诱导点的增量扩充策略，在不重新训练的前提
+下提升模型对新状态区域的表达能力。算法以系统名义模型的残差动力学为学习目标，在每一时刻同时输出点预测与预测不确定性，为第四章的
+ GP-MPC 控制集成提供标准化接口。
+
 \section{稀疏高斯过程及其变分推断}
 
 标准高斯过程回归在训练集规模为 $N$ 时，需要对 $N \times N$ 的核矩阵进行 Cholesky
@@ -451,16 +464,35 @@ $S_u$的更新方法为
     (L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n})^\top S_{u_o} (L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n})
 \end{equation}
 
-这是由$u_n = K_{u_n u_o} K_{u_o u_o}^{-1} S_{u_o}$得来的，我们将上述增量更新方法记为\autoref{alg:add_new_inducing}。
+这是由$u_n = K_{u_n u_o} K_{u_o u_o}^{-1} S_{u_o}$得来的。
+
+但我们还需要知道何时加入一个新的诱导点，一个直觉上的做法是避免空间冗余，如果新诱导点跟旧诱导点在空间上相距较远则加入。
+但这种在欧氏空间下的距离度量并不是稀疏高斯所关心的，稀疏高斯过程利用诱导点构建了一个低维子空间$\mathcal H_U = \text{span}
+\{ k(\cdot, u_i) \}$，关键是新点是否能够提供新的基方向，是在函数空间（再生核希尔伯特空间，RKHS）里的新方向。
+
+为此我们需要计算这种相关性，计算当前诱导点子空间解释了新诱导点多少比例的方差，即
+\begin{equation}
+    r(u_o) = \frac{K_{u_n u_n} - K_{u_n u_o} K_{u_o u_o}^{-1} K_{u_o u_n}}{K_{u_n u_n}}
+\end{equation}
+当该值大于给定的阈值$\epsilon$时，就加入新诱导点。
+
+我们将上述增量更新方法记为\autoref{alg:add_new_inducing}。
 
 \begin{algorithm}[htbp]
     \caption{诱导点增量更新}
     \label{alg:add_new_inducing}
     \begin{algorithmic}[1]
         \Require 
-        \Statex 新诱导变量$u_o$及其协方差矩阵的分解矩阵$L_{u_o u_o}$
+        \Statex 旧诱导变量$u_o$及其协方差矩阵的分解矩阵$L_{u_o u_o}$，阈值参数$\epsilon$
         \Statex 新旧诱导点间的协方差$K_{u_o u_n}$，新诱导点自身的协方差$K_{u_n u_n}$
         \Statex 旧变分分布参数：均值 $m_{u_o}$，协方差 $S_{u_o}$
+
+        \Function{CheckRelevance}{$L_{u_o u_o}$, $K_{u_o u_n}, \epsilon$}
+            \State $C \gets L_{u_o u_o}^{-1} K_{u_o u_n}$
+            \State $v \gets K_{u_n u_n} - C^\top C$
+            \State $r(u_n) \gets \frac{v}{K_{u_n u_n}}$
+            \State \textbf{return} $r(u_n) > \epsilon$
+        \EndFunction
 
         \Function{AddNewInducing}{$u_n$, $L_{u_o u_o}$, $K_{u_o u_n}$, $K_{u_n u_n}$, $m_{u_o}$, $S_{u_o}$}
             
