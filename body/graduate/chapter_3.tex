@@ -483,9 +483,9 @@ $S_u$的更新方法为
     \label{alg:add_new_inducing}
     \begin{algorithmic}[1]
         \Require 
-        \Statex 旧诱导变量$u_o$及其协方差矩阵的分解矩阵$L_{u_o u_o}$，阈值参数$\epsilon$
-        \Statex 新旧诱导点间的协方差$K_{u_o u_n}$，新诱导点自身的协方差$K_{u_n u_n}$
-        \Statex 旧变分分布参数：均值 $m_{u_o}$，协方差 $S_{u_o}$
+        \Statex 旧诱导变量$u_o$及其协方差矩阵的分解矩阵$L_{u_o u_o}$，阈值参数$\epsilon$;
+        新旧诱导点间的协方差$K_{u_o u_n}$，新诱导点自身的协方差$K_{u_n u_n}$;
+        旧变分分布参数：均值 $m_{u_o}$，协方差 $S_{u_o}$
 
         \Function{CheckRelevance}{$L_{u_o u_o}$, $K_{u_o u_n}, \epsilon$}
             \State $C \gets L_{u_o u_o}^{-1} K_{u_o u_n}$

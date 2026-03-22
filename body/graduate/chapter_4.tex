@@ -12,3 +12,306 @@
 进行修改以使控制器往更确定的方向进行控制量的优化。完整的算法将在不同场景下进行仿真和实物上的实验，以验证算法的有效性。
 
 \section{高斯过程残差模型与名义模型的结合}
+
+由于车辆动力学存在非线性性，延迟、故障都会导致名义模型与真实模型间存在模型失配问题，也就是存在残差。
+\begin{equation}
+    f_{true} = f_{nominal} + f_{learning}
+\end{equation}
+其中$f_{nominal}$的离散表达即是\autoref{equ:discrete_frenet}的模型，而$f_{learning}$便是高斯过程回归模型。因此，
+从另一个角度来说，$f_{learning} = f_{true} - f_{nominal}$是一个残差模型。
+
+\subsection{系统模型的增广}
+
+由于非线性性、延迟、故障等因素并不能直接由上一时刻的状态量和控制量决定，而是由一定窗口内的相关量决定，因此我们必须
+增广整个控制系统。假设我们需要考虑过去$T$个时刻的状态量和控制量，我们将状态量增广为
+\begin{equation} \label{equ:augmented_state}
+    x_k = [d_k, \theta_{e, k}, v_k, w_k, v_{k-1}, w_{k-1}, \cdots, v_{k-T+1}, w_{k-T+1}, 
+    a_{k-1}, \delta_{k-1}, \cdots, a_{k-T+1}, \delta_{k-T+1}]^\top
+\end{equation}
+
+于是状态方程变成了
+\begin{equation}
+    x_{k+1} = A_k x_k + B_k u_k + C_k + G(x_k, u_k)
+\end{equation}
+其中$u_k = [a_k, \delta_k]^\top$，$G(x_k, u_k)$即是$f_{learning}$的离散表达式，
+\begin{equation} \label{equ:augmented_A}
+    A_k = 
+    \begin{bmatrix}
+        1 & v_k^r \mathrm{d}t & 0 & 0 & 0 & 0 & 0 & 0 & 0 \\
+        v_k^r {c_k^r}^2 \mathrm{d}t & 1 & -c_k^r \mathrm{d}t & \mathrm{d}t & 0 & 0 & 0 & 0 & 0 \\
+        0 & 0 & 1 & 0 & 0 & 0 & 0 & 0 & 0 \\
+        0 & 0 & 0 & 1 & 0 & 0 & 0 & 0 & 0 \\
+        0 & 0 & 1 & 0 & 0 & 0 & 0 & 0 & 0 \\
+        0 & 0 & 0 & 1 & 0 & 0 & 0 & 0 & 0 \\
+        \vdots & \vdots & \vdots & \vdots & \ddots & \vdots & \vdots & \vdots & \vdots \\
+        0 & 0 & 0 & 0 & 0 & 1 & 0 & 0 & 0 \\
+        0 & 0 & 0 & 0 & 0 & 0 & 1 & 0 & 0 \\
+    \end{bmatrix} \in \mathbb R^{4T, 4T}
+\end{equation}
+
+\begin{equation} \label{equ:augmented_B}
+    B_k = 
+    \begin{bmatrix}
+        0 & 0 \\
+        0 & 0 \\
+        \mathrm{d}t & 0 \\
+        0 & \mathrm{d}t \\
+        1 & 0 \\
+        0 & 1 \\
+        \vdots & \vdots \\
+        0 & 0 \\
+        0 & 0 
+    \end{bmatrix} \in \mathbb R^{4T, 2}, 
+    C_k = \begin{bmatrix}
+        0 \\ 0 \\ 0 \\ 0 \\ \vdots \\ 0
+    \end{bmatrix} \in \mathbb R^{4T, 1}
+\end{equation}
+
+虽然我们将高斯过程回归的离散系统写成了$G(x_k, u_k)$，但实际上并不需要为$x_k$的每一个维度都训练一个GP模型，本文中
+我们只为$v_k$和$w_k$训练两个独立的GP模型。这是因为$d_k, \theta_{e, k}$的模型是运动学上的，其残差往往很小，而$v_k$和$w_k$
+的模型是动力学的，复杂且与真实模型的残差较大。因此我们实际上输入GP模型的回归量是
+\begin{equation}
+    z_k = [v_k, w_k, a_k, \delta_k, v_{k-1}, w_{k-1}, a_{k-1}, \delta_{k-1}, \ldots, 
+    v_{k-T+1}, w_{k-T+1}, a_{k-T+1}, \delta_{k-T+1}]^\top
+\end{equation}
+且
+\begin{equation}
+    G(x_k, u_k) = \begin{bmatrix}
+        0 \\ 0 \\
+        G_v(z_k) \\ G_w(z_k) \\
+        0 \\ \vdots \\ 0
+    \end{bmatrix}
+\end{equation}
+
+\subsection{均值和方差的传递}
+值得注意的是，无论是\autoref{equ:gpr_intro1}、\autoref{equ:gpr_intro2}还是\autoref{equ:mu_su_predictive}都预设回归量
+$x^*$是确定的，不是一个随机变量。如果
+它是一个随机变量，GP得到的输出将不符合高斯分布，而是复合的分布。因此，我们需要一个近似方法，将这个复合分布近似为一个高斯分布，
+使得GP的预测公式能够在MPC的预测窗口内传播，同时我们需要随机输入下的高斯过程回归预测公式。
+
+假设输入分布是高斯分布，$x^* \sim \mathcal N(\mu_{x^*}, \Sigma_{x^*})$，那预测
+分布由对$x^*$的积分得到
+\begin{equation}
+    p(f(x^*) | \mu_{x^*}, \Sigma_{x^*}) = \int p(f(x^*) | x^*, \mathcal D)p(x^*) \mathrm{d}x^*
+\end{equation}
+其中$p(f(x^*) | x^*, \mathcal D)$的均值$\mu(x^*)$和方差$\Sigma(x^*)$预测即为\autoref{equ:mu_su_predictive}。这个积分并不是解析的，
+虽然可以使用蒙特卡洛等方法近似，但这样计算复杂度太大。
+
+利用总期望公式和条件方差公式我们可以得到：
+\begin{equation}
+    \begin{aligned}
+    m(x^{*}) &= E_{x^{*}}[E_{f(x^{*})}[f(x^{*})|x^{*}]]=E_{x^{*}}[\mu(x^{*})] \\
+    v(x^{*}) &= E_{x^{*}}[\mathrm{var}_{f(x^{*})}(f(x^{*})|x^{*})]+\mathrm{var}_{x^{*}}(E_{f(x^{*})}[f(x^{*})|x^{*}]) \\
+    &= E_{x^{*}}[\Sigma(x^{*})]+\mathrm{var}_{x^{*}}(\mu(x^{*}))
+    \end{aligned}
+\end{equation}
+
+\textbf{1. 均值传播公式计算}，利用泰勒公式展开均值部分：
+\begin{equation}
+    \mu(x^*)=\mu(\mu_{x^*})+\left.\frac{\partial\mu(x^*)}{\partial x^*}\right|_{x^*=\mu_{x^*}}^T(x^*-\mu_{x^*})+O(\|x^*-\mu_{x^*}\|^2)
+\end{equation}
+其中$\mu(\mu_{x^*}) = k(\mu_{x^*}, Z) K_{u u}^{-1} m_u$且$\|x^*-\mu_{x^*}\|^2 = (x^*-\mu_{x^*})^\top (x^*-\mu_{x^*})$。
+
+给定高斯核$k^i(x^*)=k(x^i,x^*)=\sigma_f^2 \exp\left[-\frac{1}{2}\sum_{d=1}^{D}l_d^{-1}(x_d^i-x_d^*)^2\right]$，
+$D$是回归量的维度，$i$是第$i$个历史数据。核函数对$x^*$的导数是：
+\begin{equation}
+    \begin{cases}
+    & \left.\frac{\partial k^i(x^*)}{\partial x_d^*}\right|_{x^*=\mu_{x^*}} = l_d^{-1}(x_d^i-\mu_{x^*d})k^i(\mu_{x^*}) \\
+    & \left.\frac{\partial^2k^i(x^*)}{\partial x_d^*\partial x_e^*}\right|_{x^*=\mu_{x^*}} = 
+    l_d^{-1}[-\delta_{de}+(x_d^i-\mu_{x^*_d})l_e^{-1}(x_e^i-\mu_{x^*_e})]k^i(\mu_{x^*})
+    \end{cases}
+\end{equation}
+那么全体诱导点与$x^*$的核函数对$x^*$的导数是一个向量，均值对$x^*$的导数为：
+\begin{equation}
+    \frac{\partial\mu(x^*)}{\partial x_d^*}|_{x^*=\mu_{x^*}}
+    =\frac{\partial \mathbf{k}(x^*, Z)}{\partial x_d^*} K_{u u}^{-1} m_u
+    =[l_d^{-1}(Z_d-\mu_{x^{*}_{d}}).\mathbf{k}(\mu_{x^*}, Z_d)]^T K_{u u}^{-1} m_u
+\end{equation}
+其中$.$是按元素乘积，于是
+\begin{equation}
+    \mathbb E_{x^*}[\mu(x^*)] \approx \mathbb E_{x^*} \left[ 
+       \mu(\mu_{x^*}) + \left.\frac{\partial\mu(x^*)}{\partial x^*}\right|_{x^*=\mu_{x^*}}^T(x^*-\mu_{x^*})
+     \right] = \mu(\mu_{x^*})
+\end{equation}
+
+\textbf{2. 方差传播公式计算}，利用泰勒公式展开方差部分：
+\begin{equation}
+    \begin{aligned}
+        \Sigma(x^{*}) & =
+        \quad\Sigma(\mu_{x^{*}})+\left.\frac{\partial\Sigma(x^{*})}{\partial x^{*}}\right|_{x^{*}
+        =\mu_{x^{*}}}^{T}(x^{*}-\mu_{x^{*}}) +O(||x^{*}-\mu_{x^{*}}||^{2})
+    \end{aligned}
+\end{equation}
+以及
+\begin{equation}
+    \begin{aligned}
+\operatorname{var}_{x^{*}}(\mu(x^{*})) & \approx\quad\operatorname{var}_{x^{*}}\left(\mu(\mu_{x^{*}})+\left.\frac{\partial\mu(x^{*})}{\partial x^{*}}\right|_{x^{*}=\mu_{x^{*}}}^{T}(x^{*}-\mu_{x^{*}})\right) \\
+ & =\quad\frac{\partial\mu(x^{*})}{\partial x^{*}}|_{x^{*}=\mu_{x^{*}}}^{T}\Sigma_{x^{*}}\frac{\partial\mu(x^{*})}{\partial x^{*}}|_{x^{*}=\mu_{x^{*}}}.
+\end{aligned}
+\end{equation}
+最终
+\begin{equation} \label{equ:var_transfer_gp}
+    v(x^{*}) = \Sigma(\mu_{x^{*}}) + \frac{\partial\mu(x^{*})}{\partial x^{*}}|_{x^{*}=\mu_{x^{*}}}^{T}\Sigma_{x^{*}}\frac{\partial\mu(x^{*})}{\partial x^{*}}|_{x^{*}=\mu_{x^{*}}}
+\end{equation}
+
+\textbf{3. 最终系统模型}，
+    上面考虑的仅仅是高斯过程回归模型自身的传播，而我们需要将其扩展至整个车辆模型，设状态量的均值为$\bar x$，回归量的均值为$\bar z$，那么
+\begin{equation} \label{equ:transfer_model}
+    \begin{aligned}
+        x_{k+1} &= A_k \bar x_k + B_k u_k + C_k + \mu(\bar z_k) \\
+        \Sigma_{k+1}^x &= F_k \Sigma_{k}^x
+        F_k^\top + \Sigma(\bar z_k)
+    \end{aligned}
+\end{equation}
+\autoref{equ:var_transfer_gp}的方差传递被拆除两部分了，且$F_k = A_k + \frac{\partial \mu(z_k)}{\partial x}|_{z_k = \bar z_k}$。
+
+
+因此我们可以写出GP-MPC的优化问题：
+\begin{equation}
+\label{equ:gp_mpc_cost}
+\begin{aligned}
+    \arg \min_{\{u_{k+i}\}_{i=0}^{p-1}} \quad & J = \sum_{i=0}^{p-1} \left(
+        \| \bar x_{k+i} - x^{r}_{k+i} \|_Q^2
+        + \| u_{k+i} - u^{r}_{k+i} \|_R^2 \right)
+    + \| \bar x_{k+p} - x^{r}_{k+p} \|_S^2 \\
+    \text{s.t.} \quad
+    & \bar x_{k+i+1} = A_{k+i} \bar x_{k+i} + B_{k+i} u_{k+i} + C_{k+i} + \mu(\bar z_{k+i}), \quad i = 0, \ldots, p-1, \\
+    & \Sigma_{k+i+1}^x = F_k \Sigma_{{k+i}}^x
+        F_{k+i}^\top + \Sigma(\bar z_{k+i}), \quad i = 0, \ldots, p-1, \\
+    & \bar x_{k+i} \in \mathcal{X}, \quad u_{k+i} \in \mathcal{U}, \quad i = 0, \ldots, p-1, \\
+    & \bar x_{k+p} \in \mathcal{X}_f, \quad \bar x_k = x_k, \quad \Sigma_k^x = 0
+\end{aligned}
+\end{equation}
+
+\subsection{GP一阶近似}
+在上一小节中我们用泰勒展开近似了输入的符合分布，这是在随机变量分布的概率层面做的近似，它解决的是概率传播问题。
+我们还需要解决模型精度问题，\autoref{equ:gp_mpc_cost}中的状态转移方程直接由状态均值处的高斯过程预测做残差补偿，
+并没有提供任何高斯过程回归模型的导数信息，是以零阶近似提供了偏置修正，虽然计算速度很快但对GP的结构不敏感。因此有必要
+同时提供两种近似方案，以适应不同的精度需求。
+
+具体而言，GP的一阶近似同意是以泰勒公式展开GP的均值预测：
+\begin{equation}
+    \begin{aligned}
+        \mu(z_k) & \approx \mu(z_k^r)+\left.\frac{\partial\mu(z_k)}{\partial z_k}\right|_{z_k=z_k^r}^T(z_k-z_k^r) \\
+        &= \mu(z_k^r) + \left.\frac{\partial\mu(z_k)}{\partial x_k}\right|_{z_k=z_k^r}^T(x_k-x_k^r) + 
+        \left.\frac{\partial\mu(z_k)}{\partial u_k}\right|_{z_k=z_k^r}^T(u_k-u_k^r) \\
+        &= A_k^g x_k + B_k^g u_k + C_k^g
+    \end{aligned}
+\end{equation}
+将这个式子整合到\autoref{equ:transfer_model}中我们得到：
+\begin{equation} \label{equ:first_order_gp}
+    x_{k+1} = (A_k + A_k^g) \bar x_k + (B_k + B_k^g) u_k + C_k + C_k^g
+\end{equation}
+
+我们将\autoref{equ:gp_mpc_cost}得到的GP-MPC记为\textbf{零阶GP-MPC}算法，如果将状态转移方程替换为
+\autoref{equ:first_order_gp}则记为\textbf{一阶GP-MPC}算法。二者的方差传递公式是一样的。
+
+\section{方差感知与利用}
+
+高斯过程的一个重要优势是它提供了其预测的方差，即其不确定性，我们可以利用它们来提升GP-MPC的跟踪精度、提高控制稳定性。
+
+\subsection{方差感知的代价函数}
+
+在获取数据阶段，我们往往希望能够得到尽可能丰富的特征，使模型能够在不同区域都有良好的预测性能。但是在执行轨迹跟踪任务途中，
+我们更希望优化器朝着GP模型更确定的方向进行优化，在这个方向上，GP模型的预测精度更高。
+为了满足这一要求，我们需要修改优化问题中的代价函数，首先使用泰勒公式展开方差预测函数以得到相应导数信息：
+\begin{equation}
+    \begin{aligned}
+        \Sigma &= \Sigma(x^r, u^r) + \frac{\partial \Sigma}{\partial x} (x - x^r) + \frac{\partial \Sigma}{\partial u} (u - u^r)
+\\ &= A^{\Sigma} x + B^{\Sigma} u + C^{\Sigma}
+    \end{aligned}
+\end{equation}
+因为我们为$v$和$w$单独训练了两个高斯过程回归模型，我们记
+\begin{equation}
+    A^v = \frac{\partial \Sigma^v}{\partial x}, A^w = \frac{\partial \Sigma^w}{\partial x},
+    B^v = \frac{\partial \Sigma^v}{\partial u}, B^w = \frac{\partial \Sigma^w}{\partial u}
+\end{equation}
+仍将\autoref{equ:gp_mpc_cost}中的代价函数记为$J$，方差感知的代价函数为
+\begin{equation}
+    J_{var} = J + \lambda_v \sum_{i=0}^{L_{var}} (A^v_i x_i + B^v_i u_i + C^v_i) 
+    + \lambda_w \sum_{i=0}^{L_{var}} (A^w_i x_i + B^w_i u_i + C^w_i)
+\end{equation}
+其中$\lambda_v$和$\lambda_w$是用户定义的参数，数值越大GP-MPC越谨慎，$L_{var} \leq p$为方差感知所涉及的长度。记
+\begin{equation}
+    \begin{aligned}
+        & G_x = \lambda_v \cdot [A^v_0 \quad A^v_1 \quad \cdots \quad A^v_{L_{var}}]
+        + \lambda_w \cdot [A^w_0 \quad A^w_1 \quad \cdots \quad A^w_{L_{var}}] \\
+        & G_u = \lambda_v \cdot [B^v_0 \quad B^v_1 \quad \cdots \quad B^v_{L_{var}}]
+        + \lambda_w \cdot [B^w_0 \quad B^w_1 \quad \cdots \quad B^w_{L_{var}}] \\
+        & G = \lambda_v \sum_{i=0}^{L_{var}} C^v_i + \lambda_w \sum_{i=0}^{L_{var}} C^w_i
+    \end{aligned}
+\end{equation}
+那么从\autoref{equ:condense}出发
+\begin{equation}
+    \begin{aligned}
+        J_{var} &= (x_{ex} - x_{ref})^\top Q (x_{ex} - x_{ref}) + (u_{ex} - U_{ref})^\top Q (u_{ex} - U_{ref}) \\
+        &+ G_x x_{ex} + G_u u_{ex} + G \\
+        &= u_{ex}^T(B_{ex}^TQB_{ex}+R)u_{ex} \\
+        &+2\left[(A_{ex}x_0+ C_{ex}-x_{ref})^TQB_{ex}-U_{ref}R
+        + G_x B_{ex} + G_u
+        \right]u_{ex}
+    \end{aligned}
+\end{equation}
+
+\subsection{机会约束}
+
+虽然本文仅对控制量施加约束，并未直接约束状态量，但GP所提供的预测方差在机会约束（chance constraint）框架中具有重要的应用潜力，值得进一步讨论。
+
+假设对第 $k$ 步状态量存在如下硬约束与状态转移方程：
+\begin{equation}
+    b_k^L \leq x_k \leq b_k^U, \qquad x_k = A_{k-1} x_{k-1} + B_{k-1} u_{k-1} + C_{k-1}
+\end{equation}
+由于 $x_{k-1}$ 本身携带不确定性，其协方差 $\Sigma_{k-1}^x$ 可由上一步的预测方差传播得到，从而 $x_k$ 服从均值为 $A_{k-1}x_{k-1} + B_{k-1}u_{k-1} + C_{k-1}$、方差为 $A_{k-1}\Sigma_{k-1}^x A_{k-1}^\top$ 的分布。
+
+将硬约束松弛为概率保证形式，即要求约束以不低于 $p_k = \Phi(\epsilon_k)$ 的概率成立，可得如下确定性等价约束（deterministic equivalent）：
+\begin{equation}
+    \begin{aligned}
+        A_{k-1} x_{k-1} + B_{k-1} u_{k-1} + C_{k-1} 
+        + \epsilon_k \sqrt{A_{k-1} \Sigma_{k-1}^x A_{k-1}^\top} 
+        &\leq b_k^U \\
+        A_{k-1} x_{k-1} + B_{k-1} u_{k-1} + C_{k-1} 
+        - \epsilon_k \sqrt{A_{k-1} \Sigma_{k-1}^x A_{k-1}^\top} 
+        &\geq b_k^L
+    \end{aligned}
+\end{equation}
+其中 $\Phi(\cdot)$ 为标准正态分布的累积分布函数，$\epsilon_k = \Phi^{-1}(p_k)$ 为对应的分位数。
+该约束的含义为：在预测不确定性的影响下，状态量 $x_k$ 以至少 $p_k$ 的概率满足原硬约束。
+$\epsilon_k$ 越大，约束收紧程度越高，对应的保证概率 $p_k$ 也越接近~$1$。
+
+上述机会约束框架与系统的鲁棒性之间存在直接联系。
+
+注意到收紧量 $\epsilon_k \sqrt{A_{k-1} \Sigma_{k-1}^x A_{k-1}^\top}$ 随预测步数 $k$ 的增加而单调增大：
+GP的预测方差 $\Sigma_{k-1}^x$ 在远离训练数据区域或经过多步传播后逐渐累积，
+导致约束边界被进一步向内收紧。
+这一性质使得控制器在模型不确定性较大时自动采取更为保守的策略，
+从而在开环意义下提供一定程度的鲁棒性保障。
+
+进一步地，若将方差传播写为递推形式
+\begin{equation}
+    \Sigma_k^x = A_{k-1} \Sigma_{k-1}^x A_{k-1}^\top + \Sigma_k^w
+\end{equation}
+其中 $\Sigma_k^w$ 为过程噪声协方差，则当系统矩阵 $A_{k-1}$ 的谱半径满足
+$\rho(A_{k-1}) < 1$ 时，方差序列 $\{\Sigma_k^x\}$ 有界，
+收紧量不会无界增长，机会约束始终保持可行性。
+反之，若 $\rho(A_{k-1}) \geq 1$，预测不确定性随时间累积，
+约束收紧量持续增大，可能导致优化问题在长时域预测下趋于不可行，
+此时需适当缩短预测时域或引入终端约束以恢复可行性。
+
+在随机MPC的框架下，机会约束的满足与闭环稳定性之间存在内在联系。
+若选取适当的终端代价函数 $V_f(x)$ 和终端约束集 $\mathcal{X}_f$，
+使得系统在终端区域内的标称动态渐近稳定，
+则基于机会约束的MPC在均方意义下可保证闭环系统的递归可行性（recursive feasibility）与稳定性。
+具体而言，令 $V_k^*$ 为第 $k$ 步的最优代价，
+若存在 $\mathcal{K}_\infty$ 类函数 $\alpha_1, \alpha_2$ 以及 $\mathcal{K}$ 类函数 $\alpha_3$ 使得
+\begin{equation}
+    \alpha_1(\|x_k\|) \leq \mathbb{E}[V_k^*] \leq \alpha_2(\|x_k\|), 
+    \qquad
+    \mathbb{E}[V_{k+1}^*] - \mathbb{E}[V_k^*] \leq -\alpha_3(\|x_k\|)
+\end{equation}
+则闭环系统在均方意义下渐近稳定。
+上述条件的成立依赖于GP预测方差的有界性，
+而这正是GP模型在已充分探索的状态空间区域内所能提供的保证。
+因此，GP预测方差不仅驱动约束收紧，同时也为稳定性分析提供了可量化的不确定性度量。
+
+\section{GP-MPC整体框架和流程}
+
