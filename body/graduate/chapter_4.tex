@@ -123,7 +123,7 @@ $f_{\mathrm{learning}} = f_{\mathrm{true}} - f_{\mathrm{nominal}}$ 本质上是�
 而 $v_k$、$w_k$ 受动力学影响显著，模型复杂度更高，与真实系统之间的残差也更大。
 因此，本文仅针对 $v_k$ 和 $w_k$ 分别训练两个独立的 GP 模型。
 输入 GP 模型的回归量定义为
-\begin{equation}
+\begin{equation} \label{equ:augmented_zk}
     z_k = [v_k,\ w_k,\ a_k,\ \delta_k,\ v_{k-1},\ w_{k-1},\ a_{k-1},\ \delta_{k-1},\ \ldots,\ 
     v_{k-T+1},\ w_{k-T+1},\ a_{k-T+1},\ \delta_{k-T+1}]^\top
 \end{equation}
@@ -497,3 +497,4 @@ $x_{\mathrm{guess}}$、$u_{\mathrm{guess}}$，需要对其进行初始化以启�
 
 \section{实验数据与分析}
 
+我们从FITC出发，探究$T$的选择

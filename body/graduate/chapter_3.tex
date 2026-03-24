@@ -328,6 +328,8 @@ KL散度。
 
 \subsection{变分分布的非增量更新}
 
+Huber等人\cite{Huber_2014}在标准GP模型上实现了一个类卡尔曼更新法，我们将这个方法推广至稀疏变分结构。
+
 在$k-1$时刻，我们有变分分布$q(u) = \mathcal N (m_{k-1}, S_{k-1})$，在$k$时刻我们得到了一个新的数据点
 $(x_k, y_k)$，$p(y_k | u) = \mathcal N(K_{f_k u} K_{uu}^{-1}u, \sigma^2)$，$u$在$y_k$下的条件概率（后验）为
 \begin{equation}
@@ -521,6 +523,123 @@ $S_u$的更新方法为
 \end{algorithm}
 
 \section{实验数据和分析}
+
+\subsection{数据集选择与评估指标}
+
+本章的数据有两个来源，一个是用于演示算法效果，对比标准高斯过程和其他在线算法的仿真数据，另一个是在实车测试平台上获取的多维数据。
+前者我们采用以下函数生成数据：
+\begin{equation}
+    y = x \sin x + w, \quad w \sim \mathcal N(0, 0.33^2)
+\end{equation}
+而后者则同第四章 \autoref{equ:augmented_zk} 所示
+\begin{equation}
+    z_k = [v_k,\ w_k,\ a_k,\ \delta_k,\ v_{k-1},\ w_{k-1},\ a_{k-1},\ \delta_{k-1},\ \ldots,\ 
+    v_{k-T+1},\ w_{k-T+1},\ a_{k-T+1},\ \delta_{k-T+1}]^\top
+\end{equation}
+这是一个$D=4T$维的特征量，对应系统残差$d_k$为需预测值$y_k$, 那么
+\begin{equation}
+X = [z_1, z_2, \ldots, z_N]^\top \in \mathbb R^{N \times D}, 
+\quad Y = [y_1, y_2, \ldots, y_N]^\top \in \mathbb R^{N \times 1}
+\end{equation}
+
+为了全面评估高斯过程回归模型的预测性能，本文采用三种互补的评价指标：均方根误差（Root Mean Squared Error, RMSE）、平均绝对
+误差（Mean Absolute Error, MAE）以及负对数似然（Negative Log-Likelihood, NLL）。这些指标分别从点预测精度和不确定性建模质量
+两个方面进行评价。
+
+\textbf{均方根误差（RMSE）}用于衡量预测均值与真实值之间的偏差，其定义为：
+\begin{equation}
+\mathrm{RMSE} = \sqrt{ \frac{1}{n} \sum_{i=1}^{n} (y_i - \mu_i)^2 },
+\end{equation}
+其中，$y_i$ 表示真实值，$\mu_i$ 表示模型的预测均值。RMSE对较大的预测误差更为敏感。
+
+\textbf{平均绝对误差（MAE）}用于衡量预测值与真实值之间的平均绝对偏差，其定义为：
+\begin{equation}
+\mathrm{MAE} = \frac{1}{n} \sum_{i=1}^{n} |y_i - \mu_i|,
+\end{equation}
+其中，$y_i$ 和 $\mu_i$ 分别表示真实值和预测均值。相比RMSE，MAE对异常值更加鲁棒。
+
+\textbf{负对数似然（NLL）}，高斯过程模型输出预测分布 $y_i \sim \mathcal{N}(\mu_i, \sigma_i^2)$，NLL用于评估预测分布对真实数
+据的拟合程度，其定义为：
+\begin{equation}
+\mathrm{NLL} = \frac{1}{n} \sum_{i=1}^{n} \left[ 
+\frac{1}{2} \log (2\pi \sigma_i^2) + \frac{(y_i - \mu_i)^2}{2\sigma_i^2}
+\right],
+\end{equation}
+其中 $\sigma_i^2$ 为预测方差。NLL同时考虑预测误差与不确定性估计的合理性，值越小表示模型的概率预测性能越好。
+
+综上，RMSE和MAE用于评估点预测精度，其中RMSE对大误差更敏感，而MAE具有更强的鲁棒性；NLL则进一步评估模型预测分布的质量，从而综合反映模型
+的预测性能与不确定性建模能力。
+
+除此以外我们还需要对比不同算法的计算时间，对比这一指标对实时系统上运行的算法非常关键。
+
+\subsection{稀疏化与变分推断效果}
+
+给定平方指数核
+\begin{equation}
+    k(x,x') =
+    0.33^2
+    \exp
+    \left(
+    -\frac{(x-x')^2}{2}
+    \right)
+\end{equation}
+我们实现标准高斯过程回归，稀疏高斯过程（DTC 和 FITC），以及 FITC 的变分推断模型，
+在合成数据集上进行对比实验。训练集由函数 $y = x\sin x$ 加噪声生成，共 51 个样本点，
+噪声标准差为 $\sigma = 0.33$；诱导点从训练集中均匀抽取 11 个。
+
+如~\autoref{fig:compare_4gp} 所示，四种方法均能在训练区间 $[0, 20]$ 内捕捉到
+函数的主要趋势。标准 GP（左上）的均值曲线与数据点吻合最为紧密，置信区间在训练区间
+内较窄，而在外推区域 $(-5, 0)$ 和 $(20, 25)$ 迅速展宽，体现出合理的不确定性估计。
+DTC GP（右上）和 FITC GP（左下）均使用相同的 11 个诱导点，均值曲线整体走势与标准
+GP 相近，但置信区间在训练区间内略宽，说明稀疏近似引入了额外的近似误差。
+FITC 变分推断模型（右下）的预测结果与 FITC GP 一致，表明在当前实验设置下两者
+收敛至相同的解。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{onlinegp/compare_4gp.png}
+    \caption{不同 GP 模型的预测结果对比。红色曲线为预测均值，红色阴影为 $\pm 2\sigma$
+    置信区间，蓝色圆点为诱导点，叉号为训练数据。}
+    \label{fig:compare_4gp}
+\end{figure}
+
+\autoref{tab:gp_metrics} 列出了四种模型在训练集上的定量评估结果。
+
+\begin{table}[htbp]
+    \centering
+    \caption{不同 GP 模型的训练集误差指标}
+    \label{tab:gp_metrics}
+    \begin{tabular}{lcccc}
+        \toprule
+        模型 & RMSE & MAE & NLL & Time (ms) \\
+        \midrule
+        标准 GP        & 0.424 & 0.316 & 1.240 & 1.058 \\
+        DTC GP         & 1.403 & 1.079 & 6.448 & 0.643 \\
+        FITC GP        & 1.587 & 1.172 & 5.396 & 0.618 \\
+        变分 FITC GP   & 1.587 & 1.172 & 5.396 & 0.599 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+由表可见，标准 GP 在三项指标上均显著优于两种稀疏方法，RMSE 仅为 0.424，NLL 为
+1.240。稀疏方法的误差较大，主要原因在于诱导点数量（11 个）相对于训练集规模（51
+个）较少，信息压缩导致近似精度下降。DTC 与 FITC 的 NLL 分别为 6.448 和 5.396，
+FITC 略优，这与 FITC 对角修正项能更好地保留训练点处的预测不确定性的理论分析一致。
+变分 FITC GP 与 FITC GP 结果完全相同，说明在固定超参数、不进行变分优化的条件下，
+两者退化为等价模型。
+
+最后一列的计算时间是执行一百次取平均值得到的结果，可以看到稀疏方法在速度上均比标准高斯实现有优势。以上结果均
+符合本章的理论分析。
+
+\subsection{在线学习算法效果}
+
+% [6.958433 7.682433 8.142085]
+% 3.531873666355601, 1.8053380268370187
+% 3.531873666355601, 2.1832649049392807
+% 3.5318736663556, 0.40025309172857965
+
+
+
 % 1. 数据集选择
 
 %     回归基准数据集：选用UCI机器学习库中的经典回归数据集（如Boston Housing、Concrete Strength、Energy Efficiency等），这些数据集规模适中，便于与现有方法对比。
