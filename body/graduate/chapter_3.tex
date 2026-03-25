@@ -7,7 +7,7 @@
 标准 GP 每次接收新数据后须对全量历史数据重新求解，这使其在实际部署中几乎不具备可扩展性。上述局限促使研究者转向稀疏近似与在线
 推断方向，以在可接受的计算代价内保留 GP 的核心优势。
 
-本章针对轨迹跟踪控制中残差动力学的在线建模需求，提出一种面向在线学习的稀疏高斯过程回归算法。算法以变分推断为理论基础，通过诱导
+本章针对轨迹跟踪控制中残差动力学的在线建模需求，提出一种面向在线学习的稀疏高斯过程回归算法\textbf{OSVGP}。算法以变分推断为理论基础，通过诱导
 点处的变分均值与协方差作为模型的充分统计量，将完整数据集的推断问题转化为低维变分参数的优化问题；在此基础上，设计支持增量更新的
 变分参数递推机制，使模型能够随新观测数据持续修正后验估计而无需访问历史数据；进一步引入诱导点的增量扩充策略，在不重新训练的前提
 下提升模型对新状态区域的表达能力。算法以系统名义模型的残差动力学为学习目标，在每一时刻同时输出点预测与预测不确定性，为第四章的
@@ -570,7 +570,8 @@ X = [z_1, z_2, \ldots, z_N]^\top \in \mathbb R^{N \times D},
 综上，RMSE和MAE用于评估点预测精度，其中RMSE对大误差更敏感，而MAE具有更强的鲁棒性；NLL则进一步评估模型预测分布的质量，从而综合反映模型
 的预测性能与不确定性建模能力。
 
-除此以外我们还需要对比不同算法的计算时间，对比这一指标对实时系统上运行的算法非常关键。
+除此以外我们还需要对比不同算法的计算时间，对比这一指标对实时系统上运行的算法非常关键。本章的实验是在个人PC上执行Python代码得到的结果，
+处理器为英特尔 i5-13400，内存32GB。
 
 \subsection{稀疏化与变分推断效果}
 
@@ -631,14 +632,274 @@ FITC 略优，这与 FITC 对角修正项能更好地保留训练点处的预测
 最后一列的计算时间是执行一百次取平均值得到的结果，可以看到稀疏方法在速度上均比标准高斯实现有优势。以上结果均
 符合本章的理论分析。
 
-\subsection{在线学习算法效果}
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{onlinegp/trained.png}
+    \caption{DTC法超参数和诱导点未训练（左）和训练（右）的预测图}
+    \label{fig:trained}
+\end{figure}
 
-% [6.958433 7.682433 8.142085]
-% 3.531873666355601, 1.8053380268370187
-% 3.531873666355601, 2.1832649049392807
-% 3.5318736663556, 0.40025309172857965
+\autoref{fig:trained} 进一步对比了DTC GP在超参数与诱导点位置优化前后的预测效果，
+定量结果见\autoref{tab:trained_metrics}。
 
+\begin{table}[htbp]
+    \centering
+    \caption{DTC GP 训练前后的误差指标对比}
+    \label{tab:trained_metrics}
+    \begin{tabular}{lccc}
+        \toprule
+        模型 & RMSE & MAE & NLL \\
+        \midrule
+        未训练 & 1.404 & 1.080 & 6.449 \\
+        训练后 & 0.267 & 0.211 & 0.201 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
 
+经过超参数优化与诱导点位置联合训练后，模型性能得到大幅提升：RMSE 由 1.404 降至
+0.267，降幅达 81.0\%；NLL 由 6.449 骤降至 0.201，接近标准 GP 的水平（1.240），
+说明训练后的稀疏模型在保持计算效率优势的同时，预测精度与不确定性估计质量均得到
+显著改善。
+
+\subsection{在线学习算法效果对比}
+
+本小节对四种高斯过程在线学习方法进行系统性对比实验，包括：标准非在线高斯过程（Standard GP，作为基线）、本文提出的OSVGP算
+法、Bijl~\cite{bijl_2015_online}提出的基于在线FITC/PITC近似的序贯更新算法，以及Gómez-Bombarelli~\cite{gomez_asgp}等人提出的自适应高
+斯过程（AGP）算法。实验旨在从预测精度与计算效率两个维度评估OSVGP算法的在线学习性能。所有计时结果均为执行一百次取平均值。
+值得注意的是本文中AGP的非增量更新算法并非真正的非增量更新，而只是说诱导点是非增量的，其算法还是会增量更新历史数据。AGP算法
+的遗忘参数$\lambda$设置为0.99，诱导点扩充阈值参数$\epsilon=0.01$。
+
+\subsubsection{同域非增量更新}
+
+第一组实验考察各算法在原始数据域内的非增量更新性能。训练数据与更新数据均采样自 $x \in [0, 20]$，更新数据对应的目标函数退化
+为 $0.33 \cdot x\sin(x) + w$，以模拟系统动态缓慢漂移的场景。实验结果如\autoref{fig:compare_in_same} 所示，定量指标
+见\autoref{tab:same_domain}。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{onlinegp/compare_in_same.png}
+    \caption{不同在线GP模型在原数据域执行非增量更新的预测效果}
+    \label{fig:compare_in_same}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{同域非增量更新实验结果}
+\label{tab:same_domain}
+\begin{tabular}{lcccc}
+\toprule
+方法 & RMSE $\downarrow$ & MAE $\downarrow$ & NLL $\downarrow$ & 时间 (ms) \\
+\midrule
+Standard GP & 4.5299 & 3.5319 & 101.3939 & —      \\
+OSVGP       & 2.3181 & 1.8053 & 46.9220  & \textbf{6.958}  \\
+Bijl        & 2.8124 & 2.1833 & 68.0426  & 7.682  \\
+AGP         & \textbf{1.1860} & \textbf{0.9857} & \textbf{4.2223}   & 8.142  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+在同域更新场景下，AGP算法凭借其滑动窗口遗忘机制，在三项指标上均取得压倒性优势，对函数缓慢漂移的适应
+能力最强，这是因为AGP还是会增量更新（即便诱导点没有增量更新）和遗忘历史数据，由于新旧数据数量一致，使得AGP算法能够完整替换
+所有历史数据，严格来说并不是非增量更新。
+
+OSVGP相较于Standard GP基线在RMSE、MAE和NLL上分别提升了48.8\%、48.9\%和53.7\%，并以6.958~ms的耗时在三种在线方法中运行
+最快。Bijl方法的预测精度虽优于Standard GP，但整体落后于OSVGP，说明本文所提的稀疏变分在线更新策略在同域场景下具有更强的后验修正能力。
+
+\subsubsection{跨域非增量更新}
+
+第二组实验模拟更具挑战性的跨域更新场景：训练数据来自 $x \in [0, 10]$，更新数据扩展至新区域 $x \in [5, 20]$，目标函数同时变化
+为 $0.3 \cdot x\sin(x) + w$。此设置旨在评估各算法在输入空间发生外推时的泛化能力与更新有效性。实验结果如\autoref{fig:compare_no_same} 所
+示，定量指标见\autoref{tab:diff_domain}。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{onlinegp/compare_no_same.png}
+    \caption{不同在线GP模型在新数据域执行非增量更新的预测效果}
+    \label{fig:compare_no_same}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{跨域非增量更新实验结果}
+\label{tab:diff_domain}
+\begin{tabular}{lcccc}
+\toprule
+方法 & RMSE $\downarrow$ & MAE $\downarrow$ & NLL $\downarrow$ & 时间 (ms) \\
+\midrule
+Standard GP & 2.9502 & 2.4940 & 16.1597 & —      \\
+OSVGP       & \textbf{2.5824} & \textbf{2.0846} & \textbf{8.2391}  & \textbf{7.216}  \\
+Bijl        & 2.6267 & 2.1486 & 10.5021 & 7.995  \\
+AGP         & 4.7083 & 3.8327 & 12.0032 & 8.584  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+在跨域更新场景下，结果呈现出与同域场景截然不同的规律。OSVGP在RMSE、MAE和NLL三项指标上均取得最优，说明其后验更新机制能够有效利用新域观
+测数据修正诱导点处的后验分布，在输入空间发生外推时仍具备良好的泛化能力。AGP的表现则出现明显退化，RMSE（4.708）甚至高于Standard GP基线
+（2.950），这是由于其遗忘机制在跨域场景下对历史知识的过度丢弃，使模型无法保留对原始数据域的有效表达。Bijl方法的各项指标介于OSVGP与
+Standard GP之间，整体稳定但缺乏竞争力。上述结果表明，OSVGP在处理数据域发生漂移的跨域场景时，相较于依赖遗忘机制的AGP具有更强的鲁棒性。
+
+此外，观察\autoref{fig:compare_no_same} 可以发现，所有方法在 $x > 20$ 的区域预测均逐渐回归至先验均值，
+置信区间也随之扩张。这一现象是稀疏高斯过程的固有性质：在缺乏诱导点覆盖的输入区域，
+模型无法从数据中获取有效的后验信息，预测自然退化为先验分布。
+这也从侧面说明了诱导点布局对稀疏GP预测质量的关键影响，
+并引出了第三组实验中动态扩充诱导集合的必要性。
+
+\subsubsection{跨域增量更新}
+
+第三组实验在第二组的基础上，进一步引入\textbf{诱导点增量扩充}机制：
+在线更新过程中，当新数据点处的预测不确定性超过先验方差的设定阈值时，
+将其动态纳入诱导集合，以增强模型对新域的表达能力。
+实验结果如\autoref{fig:compare_online} 所示，定量指标见\autoref{tab:incremental}。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{onlinegp/compare_online.png}
+    \caption{不同在线GP模型在新数据域执行增量与非增量更新的预测效果对比}
+    \label{fig:compare_online}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{跨域增量更新实验结果}
+\label{tab:incremental}
+\begin{tabular}{lcccc}
+\toprule
+方法 & RMSE $\downarrow$ & MAE $\downarrow$ & NLL $\downarrow$ & 时间 (ms) \\
+\midrule
+Standard GP & 2.9502 & 2.4940 & 16.1597 & —      \\
+OSVGP       & \textbf{0.5716} & \textbf{0.3896} & 6.3140  & \textbf{27.032} \\
+Bijl        & 1.4022 & 1.2262 & 36.7192 & 28.346 \\
+AGP         & 1.7826 & 1.1257 & \textbf{2.6709}  & 27.785 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+引入诱导点动态扩充后，各方法的预测精度均较非增量场景有所提升，
+计算耗时相应上升至约27--28~ms，主要来源于诱导集合规模增大所带来的矩阵运算量增加。
+
+从\autoref{fig:compare_online} 可以直观地看出各方法的差异。
+OSVGP的诱导点随在线更新过程沿新数据域自适应密集分布，
+均值曲线对更新数据拟合效果最佳，置信区间紧致合理，
+这也与其在RMSE（0.572）和MAE（0.390）上的最优表现相吻合。
+Bijl方法同样完成了诱导点的扩充，但在输入空间右侧区域（$x > 15$）
+均值曲线出现明显偏差，置信区间偏大，反映出其后验协方差在诱导点
+快速扩充条件下难以得到准确维护，NLL（36.719）的显著劣化亦印证了这一点。
+AGP的诱导点分布较为分散，均值曲线在中间过渡区域拟合质量欠佳；
+其NLL（2.671）虽为三种在线方法中最优，但这在一定程度上源于
+其置信区间较宽、对数据点的覆盖更为保守，而非点预测精度的真实提升，
+RMSE（1.783）与MAE（1.126）均逊于OSVGP亦佐证了这一判断。
+
+\subsubsection{小结}
+
+综合三组实验可以得出以下结论：在同域非增量更新场景中，OSVGP的预测精度仅次于AGP，但计算耗时最低；在跨域非增量更新场景中，OSVGP在全部三项指
+标上均取得最优，展现出对数据域漂移的强鲁棒性；在引入诱导点增量扩充的跨域场景中，OSVGP的预测精度获得大幅提升，综合表现最优。需要指出的是，本
+节实验所用数据规模较小，各方法间的绝对时间差距尚不明显；随着数据维度与规模的增大，基于稀疏变分框架的OSVGP算法在每步更新的计算复杂度上具有明
+显优势，其速度收益将随数据规模的增长而愈加显著。后续将在真实多维传感器数据上进一步验证上述结论。
+
+\subsection{实车数据测试}
+
+本小节在真实车辆采集的多维数据上对三种在线更新算法进行验证。特征量设置为12维
+（即预测时域 $T=3$ 的情况），输入特征涵盖车辆状态量与控制输入的历史序列。
+实验流程如下：首先利用车辆正常运行工况下采集的数据训练初始GP模型（超参数未经优化），
+随后在两组异常工况数据上执行在线自适应更新，以评估各算法在真实场景下的适应能力。
+两组测试工况分别为：（1）\textbf{50ms通信延迟工况}，模拟控制回路中存在固定延迟时
+残差分布发生偏移的场景；（2）\textbf{单侧车轮驱动力不足工况}，模拟车辆执行器发生
+部分失效时系统动态特性发生显著变化的场景。
+
+训练数据集包含234个样本点及40个诱导点，数据维度如下：
+\begin{equation}
+    X_o \in \mathbb{R}^{234 \times 12}, \quad Y_o \in \mathbb{R}^{234 \times 1}, 
+    \quad U_o \in \mathbb{R}^{40 \times 12}
+\end{equation}
+两组测试数据分别包含263和242个数据点，实验将测试数据逐点顺序喂入在线更新算法，
+以严格模拟实时在线学习的应用场景。
+
+\autoref{fig:bad_wheel_delay} 展示了初始模型（更新前）在两组测试工况上的预测效果。
+可以观察到，未经更新的模型在两种异常工况下均存在无法执行预测，完全回归了先验，均值预测为0，方差预测很大。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.75\linewidth]{onlinegp/bad_wheel_delay.png}
+    \caption{未更新模型在两组工况数据上的预测效果。上图为单侧车轮驱动力不足工况，
+    下图为50ms通信延迟工况。}
+    \label{fig:bad_wheel_delay}
+\end{figure}
+
+\autoref{fig:error_loc} 展示了三种算法在在线更新过程中预测误差随数据点序号的变化
+曲线，图中星形标记点为触发诱导点扩充条件的位置。可以看出，各算法的预测误差总体
+上随更新数据的逐步接入而呈下降趋势（除了AGP算法在工况一下出现预测失常），且诱导点扩充事件主要集中于更新初期，
+反映了模型在接触新工况数据初期不确定性较高、需要扩充表达能力的规律。
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}{0.475\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{onlinegp/bad_wheel_loc.png}
+        \caption{单侧车轮驱动力不足工况}
+        \label{fig:bad_wheel_loc}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.475\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{onlinegp/delay_loc.png}
+        \caption{50ms通信延迟工况}
+        \label{fig:delay_loc}
+    \end{subfigure}
+    \caption{在线更新过程中各算法预测误差随数据序号的变化曲线，
+    星形标记点为触发诱导点动态扩充的位置。}
+    \label{fig:error_loc}
+\end{figure}
+
+\autoref{fig:update_all} 及\autoref{tab:real_car} 给出了三种算法完成全部在线更新后
+的最终预测效果与定量指标。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1.0\linewidth]{onlinegp/update_all.png}
+    \caption{三种在线GP模型在两种工况数据下完成更新后的预测效果对比。}
+    \label{fig:update_all}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{实车数据在线更新实验结果}
+\label{tab:real_car}
+\begin{tabular}{llcccc}
+\toprule
+工况 & 方法 & RMSE $\downarrow$ & MAE $\downarrow$ & NLL $\downarrow$ & 时间 (ms) \\
+\midrule
+\multirow{3}{*}{延迟工况}
+ & OSVGP & \textbf{0.03899} & \textbf{0.02837} & \textbf{-1.5689} & \textbf{129.3} \\
+ & Bijl  & 0.04125          & 0.03086          & -1.5500          & 199.5          \\
+ & AGP   & 0.93364          & 0.41083          & 38.0038          & 156.7          \\
+\midrule
+\multirow{3}{*}{驱动力不足工况}
+ & OSVGP & \textbf{0.03555} & \textbf{0.02759} & \textbf{-1.5646} & \textbf{118.7} \\
+ & Bijl  & 0.04530          & 0.03766          & -1.4888          & 193.7          \\
+ & AGP   & 0.03905          & 0.02994          & -1.0567          & 134.3          \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+从实验结果可以得出以下结论。
+
+\textbf{延迟工况：}OSVGP在RMSE、MAE和NLL三项指标上均优于Bijl方法，
+同时计算耗时（129.3~ms）较Bijl（199.5~ms）降低约35\%。AGP在本工况下
+出现严重退化（RMSE~=~0.934，NLL~=~38.00），与前述跨域实验中的分析一致，
+其滑动窗口遗忘机制在数据分布发生较大偏移时容易导致历史知识的过度丢弃，
+使模型在有限新数据条件下难以重建有效的后验表达。
+
+\textbf{驱动力不足工况：}三种方法均取得较好的更新效果，OSVGP仍以最低的
+RMSE（0.0356）和MAE（0.0276）位居首位，NLL同样最优（-1.565），且耗时
+最短（118.7~ms）。Bijl方法的精度略有下降，AGP在本工况下表现较延迟工况
+有所恢复，但NLL（-1.057）仍逊于OSVGP与Bijl，说明其置信区间估计的
+可靠性相对较弱。
+
+综合两组实车工况实验，OSVGP在预测精度与计算效率两个维度上均表现最优，
+验证了本文所提在线更新算法在真实高维非线性系统中的有效性与工程实用性。
+值得指出的是，本实验中超参数未经专门优化，若进一步对核函数参数进行离线
+辨识，预测精度有望得到进一步提升。
 
 % 1. 数据集选择
 

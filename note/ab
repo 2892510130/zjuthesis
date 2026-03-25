@@ -1,0 +1,57 @@
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{onlinegp/compare_in_same.png}
+    \caption{不同 在线GP 模型在原数据域执行非增量更新的预测效果}
+    \label{fig:compare_in_same}
+\end{figure}
+
+Error:          RMSE         MAE          NLL          Time(ms)
+Standard GP:    +04.529947,  +03.531874,  +101.393885   /
+OSVGP:          +02.318101,  +01.805338,  +46.922038   6.958433
+Bijl:           +02.812397,  +02.183265,  +68.042572   7.682433
+AGP:            +00.539094,  +00.400253,  +00.679972   8.142085
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{onlinegp/compare_no_same.png}
+    \caption{不同 在线GP 模型在新数据域执行非增量更新的预测效果}
+    \label{fig:compare_no_same}
+\end{figure}
+
+Error:          RMSE         MAE          NLL          Time(ms)
+Standard GP:    +02.950150,  +02.493981,  +16.159719   /
+OSVGP:          +02.582369,  +02.084587,  +08.239089   7.216408
+Bijl:           +02.626719,  +02.148560,  +10.502089   7.994587
+AGP:            +04.708273,  +03.832748,  +12.003207   8.584108
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{onlinegp/compare_oneline.png}
+    \caption{不同 在线GP 模型在新数据域执行增量和非增量更新的预测效果}
+    \label{fig:compare_oneline}
+\end{figure}
+
+Error:          RMSE         MAE          NLL          Time(ms)
+Standard GP:    +02.950150,  +02.493981,  +16.159719   /
+OSVGP:          +00.571583,  +00.389572,  +06.313974   27.03199
+Bijl:           +01.402201,  +01.226236,  +36.719171   28.345883
+AGP:            +01.782553,  +01.125738,  +02.670943   27.78546
+
+要注意这些实验中的数据量并不大，使得计算时间的差距并不大，随着数据量越大，OSVGP算法的速度优势越大。
+
+
+delay:
+Error:  RMSE         MAE          NLL          Time(ms)
+bijl:   +00.041251,  +00.030859,  -01.549978,  199.4935
+Error:  RMSE         MAE          NLL          Time(ms)
+osvgp:  +00.038989,  +00.028371,  -01.568901,  129.2664
+Error:  RMSE         MAE          NLL          Time(ms)
+agp:    +00.933639,  +00.410829,  +38.003817,  156.7047
+
+bad_wheel
+Error:  RMSE         MAE          NLL          Time(ms)
+bijl:   +00.045302,  +00.037661,  -01.488845,  193.7428
+Error:  RMSE         MAE          NLL          Time(ms)
+osvgp:  +00.035552,  +00.027586,  -01.564593,  118.7287
+Error:  RMSE         MAE          NLL          Time(ms)
+agp:    +00.039046,  +00.029938,  -01.056663,  134.2655
