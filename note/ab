@@ -344,3 +344,273 @@ round 4:  Mean  lateral, heading error:    +0.002121, +0.007463 |
 round 6:  Mean  lateral, heading error:    +0.002028, +0.007696 |
 round 8:  Mean  lateral, heading error:    +0.001495, +0.006498 |
 round 10: Mean  lateral, heading error:    +0.001273, +0.005354 |
+
+Real World Data
+
+Nominal:
+Mean time is:      8.95431223628692 ms.
+Max time is:       30.853 ms.
+95% time is:       14.645811831419614 ms.
+Mean lat error:    0.0025790514637130803
+Mean head error:   0.005343360225738397
+MPC v error:  0.32649346648
+MPC w error:  0.7989144288
+GPR v error:  0.32649346648
+GPR w error:  0.7989144288
+
+Delay Nominal:
+Mean time is:      8.614045112781954 ms.
+Max time is:       61.502 ms.
+95% time is:       17.378746066211278 ms.
+Mean lat error:    0.005831184627486954
+Mean head error:   0.018087699875413536
+MPC v error:  1.1016543309
+MPC w error:  2.0018098381
+GPR v error:  1.1016543309
+GPR w error:  2.0018098381
+
+Delay trained 0-GP-MPC:
+Mean time is:      13.196800884955751 ms.
+Max time is:       95.686 ms.
+95% time is:       28.54261890417216 ms.
+Mean lat error:    0.003409670756460177
+Mean head error:   0.011197157039823007
+MPC v error:  1.0948730328470002
+MPC w error:  1.8495882520000002
+GPR v error:  0.40234129509
+GPR w error:  1.13272209423
+
+Delay trained 1-GP-MPC:
+Mean time is:      13.307784140969163 ms.
+Max time is:       53.928 ms.
+95% time is:       22.74275485375923 ms.
+Mean lat error:    0.002990255888105727
+Mean head error:   0.010373050499559472
+MPC v error:  1.15416542
+MPC w error:  2.0274678103
+GPR v error:  0.532022054224
+GPR w error:  1.6442410764700002
+
+Delay non-trained 0-GP-MPC:
+Mean time is:      13.72395909090909 ms.
+Max time is:       78.498 ms.
+95% time is:       25.17990467114582 ms.
+Mean lat error:    0.0026508518986363637
+Mean head error:   0.009305595998636364
+MPC v error:  1.1198815479
+MPC w error:  1.8368622338
+GPR v error:  0.42943400987
+GPR w error:  1.0495962087000001
+
+Delay non-trained 0-GP-MPC Update1:
+Mean time is:      13.654271493212669 ms.
+Max time is:       36.208 ms.
+95% time is:       21.73900109169235 ms.
+Mean lat error:    0.003408156939819005
+Mean head error:   0.004756355595927602
+MPC v error:  1.0806368184
+MPC w error:  1.7787411405
+GPR v error:  0.35366901682999996
+GPR w error:  0.8475708840999999
+
+Delay non-trained 0-GP-MPC Update2:
+Mean lat error:    0.0029319869148051953
+Mean head error:   0.009133920906190477
+MPC v error:  1.1002333232
+MPC w error:  1.9504956921
+GPR v error:  0.42132601283
+GPR w error:  1.1919908183000003
+
+Delay non-trained 0-GP-MPC Update3:
+Mean lat error:    0.0021126250145454546
+Mean head error:   0.005804042504636363
+MPC v error:  1.1179296849
+MPC w error:  1.8875813800000003
+GPR v error:  0.5021028785
+GPR w error:  1.1294697205
+
+Delay non-trained 0-GP-MPC Update4:
+Mean lat error:    0.001838955455286818
+Mean head error:   0.006294689039545455
+MPC v error:  1.0784283354
+MPC w error:  1.8329368784
+GPR v error:  0.42543854589
+GPR w error:  1.017490108664
+
+Delay non-trained 0-GP-MPC Update_add1:
+Mean time is:      18.152624434389143 ms.
+Max time is:       43.245 ms.
+95% time is:       31.340276990589032 ms.
+Mean lat error:    0.006077907904977375
+Mean head error:   0.016548263747058825
+MPC v error:  1.1717138837
+MPC w error:  2.355203303
+GPR v error:  0.560175039
+GPR w error:  1.971573286
+
+Delay non-trained 0-GP-MPC Update_add2:
+Mean lat error:    0.004556141197802232
+Mean head error:   0.009069304879515417
+MPC v error:  1.0729480134916998
+MPC w error:  1.793806111643
+GPR v error:  0.7229019701917
+GPR w error:  1.2423947556930002
+
+Delay non-trained 0-GP-MPC Update_add3:
+Mean lat error:    0.006256063314159292
+Mean head error:   0.01173529543362832
+MPC v error:  1.0682052345000002
+MPC w error:  1.8379955897
+GPR v error:  0.49918403513000004
+GPR w error:  1.2194366152
+
+Delay non-trained 1-GP-MPC Update1:
+Mean time is:      13.120580786026201 ms.
+Max time is:       39.146 ms.
+95% time is:       21.89226015378781 ms.
+Mean lat error:    0.003921829380786027
+Mean head error:   0.006358110268122271
+MPC v error:  1.081071486
+MPC w error:  1.77424101504
+GPR v error:  0.36682951498000005
+GPR w error:  0.9370087138200001
+
+Delay non-trained 1-GP-MPC Update2:
+Mean lat error:    0.0026187780762931038
+Mean head error:   0.008518411890517242
+MPC v error:  1.13091515059
+MPC w error:  1.88088242827
+GPR v error:  0.44546508778999994
+GPR w error:  1.0512661304000002
+
+Delay non-trained 1-GP-MPC Update3:
+Mean lat error:    0.0031259974289090907
+Mean head error:   0.006100676393181818
+MPC v error:  1.0699350411
+MPC w error:  1.8578937684999999
+GPR v error:  0.37311967879999997
+GPR w error:  1.1047959567999999
+
+------------------------------------------------------
+bad_wheel:
+
+Nominal:
+Mean time is:      9.848938775510204 ms.
+Max time is:       24.305 ms.
+95% time is:       16.329017417502136 ms.
+Mean lat error:    0.030899960982448973
+Mean head error:   0.02086750458367347
+MPC v error:  1.71332877
+MPC w error:  6.74662915064
+GPR v error:  1.71332877
+GPR w error:  6.74662915064
+
+Trained 0-GP-MPC:
+Mean time is:      14.678855855855856 ms.
+Max time is:       39.726 ms.
+95% time is:       25.365497819298426 ms.
+Mean lat error:    0.003945457676523141
+Mean head error:   0.007271906128738738
+MPC v error:  1.6851942817999999
+MPC w error:  6.6371019396
+GPR v error:  0.32071171897
+GPR w error:  0.9582202296
+
+Trained 1-GP-MPC:
+Mean time is:      13.536074906367041 ms.
+Max time is:       37.709 ms.
+95% time is:       22.15745806658952 ms.
+Mean lat error:    0.003092321216779026
+Mean head error:   0.0050493760359176035
+MPC v error:  1.69594518294
+MPC w error:  6.67634104421
+GPR v error:  0.297115485224
+GPR w error:  0.76437357137
+
+Non-trained 0-GP-MPC:
+Mean lat error:    0.0030215994278017617
+Mean head error:   0.010528664829515418
+MPC v error:  1.700240192778
+MPC w error:  6.639359851567
+GPR v error:  0.381974694158
+GPR w error:  0.904600868267
+
+Non-trained 0-GP-MPC Update1:
+Mean lat error:    0.0019909862601821325
+Mean head error:   0.007069930917186148
+MPC v error:  1.71595077513
+MPC w error:  6.725101843700001
+GPR v error:  0.36971596133999995
+GPR w error:  0.88443073743
+
+Non-trained 0-GP-MPC Update2:
+Mean lat error:    0.003391251535
+Mean head error:   0.006580531683181818
+MPC v error:  1.6765851855
+MPC w error:  6.65393862183
+GPR v error:  0.3118200307
+GPR w error:  0.8312114071900001
+
+Non-trained 0-GP-MPC Update3:
+Mean lat error:    0.004028397919999999
+Mean head error:   0.008497834048888889
+MPC v error:  1.6980997929
+MPC w error:  6.676104621
+GPR v error:  0.3183866552
+GPR w error:  0.8359939493999999
+
+Non-trained 0-GP-MPC Update4:
+Mean lat error:    0.0034527904812499998
+Mean head error:   0.01200030005625
+MPC v error:  1.69835048839
+MPC w error:  6.656326095000001
+GPR v error:  0.31927607802
+GPR w error:  0.7722074641399999
+
+Non-trained 0-GP-MPC Update_add1:
+Mean lat error:    0.005707552206726459
+Mean head error:   0.02104764604932736
+MPC v error:  1.957225229
+MPC w error:  6.8016203231
+GPR v error:  0.8266509072
+GPR w error:  2.2358280092999996
+
+Non-trained 0-GP-MPC Update_add2:
+Mean lat error:    0.00655669013542601
+Mean head error:   0.018413665686098653
+MPC v error:  1.749878884
+MPC w error:  6.671347571
+GPR v error:  0.6260114507000001
+GPR w error:  1.3962598634
+
+Non-trained 1-GP-MPC Update1:
+Mean lat error:    0.004880910695111111
+Mean head error:   0.01198559536977778
+MPC v error:  2.4544877725
+MPC w error:  6.6769859812
+GPR v error:  1.2034934386999998
+GPR w error:  2.2712327761
+
+Non-trained 1-GP-MPC Update2:
+Mean lat error:    0.005366305829613734
+Mean head error:   0.009441334648497855
+MPC v error:  2.1110353578299996
+MPC w error:  6.66967595122
+GPR v error:  0.73765413709
+GPR w error:  1.9997960759500002
+
+Non-trained 1-GP-MPC Update3:
+Mean lat error:    0.00372553280753138
+Mean head error:   0.01052565986535565
+MPC v error:  1.9476812126
+MPC w error:  6.6461124205
+GPR v error:  0.61081569669
+GPR w error:  1.5654335357
+
+Non-trained 1-GP-MPC Update_add1:
+Mean lat error:    0.025089712676174783
+Mean head error:   0.02219223125501433
+MPC v error:  2.335609707939
+MPC w error:  6.94766470908
+GPR v error:  1.39780454602
+GPR w error:  3.2799904456
