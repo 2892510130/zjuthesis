@@ -6,7 +6,7 @@
 迹跟踪控制问题，提出一种基于在线稀疏高斯过程回归与模型预测控制深度融合的自适应控制框架，主要工作如下：
 
 \begin{enumerate}
-    \item 设计了面向在线更新的稀疏高斯过程回归算法，在变分推断框架下构建诱导点后验分布的递推更新机制，并提出增量式诱导点扩充策略，在计
+    \item 设计了面向在线更新的稀疏高斯过程回归算法OSVGP，在变分推断框架下构建诱导点后验分布的递推更新机制，并提出增量式诱导点扩充策略，在计
     算代价可控的前提下持续提升模型表达能力；
 
     \item 提出基于在线稀疏高斯过程回归与模型预测控制深度融合的轨迹跟踪控制框架（GP-MPC），通过学习名义模型的残差动力学，实现对控制延迟、
@@ -37,7 +37,7 @@ tightly integrates online sparse Gaussian process regression with model predicti
 The main contributions are as follows:
 
 \begin{enumerate}
-    \item An online sparse Gaussian process regression algorithm is developed, in which a 
+    \item An online sparse Gaussian process regression algorithm OSVGP is developed, in which a 
     recursive update mechanism for the variational posterior distribution over inducing points 
     is derived under the variational inference framework. An incremental inducing point 
     expansion strategy is further proposed to continuously improve model expressiveness while 

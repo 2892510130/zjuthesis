@@ -495,8 +495,442 @@ $x_{\mathrm{guess}}$、$u_{\mathrm{guess}}$，需要对其进行初始化以启�
 显著加速优化器的收敛速度。此后各时刻采用热启动策略，将上一时刻的最优解后移一步作为新的初始猜测，
 以维持求解器的高效运行。
 
+\subsection{C++实车代码实现与优化}
+为满足实车平台对实时性的严格要求，本文基于C++从零设计并实现了一套较为完整的高斯过程回归计算库。该库支持多种核函数（包括加法核与乘积核
+的组合形式），并涵盖标准GP、稀疏GP与变分GP三类推断框架。除核函数超参数需通过离线辨识预先确定外（受限于实车计算资源，在线超参数优化不具
+备实时可行性），所有GP推断与在线更新操作均由该C++库完成。MPC优化问题的求解则借助实车平台上部署的CasADi\cite{CasADi_2019}框架实现。
+
+在内存管理方面，Python原型实现中采用\texttt{vstack}与\texttt{hstack}等动态堆叠操作以处理诱导点扩充时新增的相关数据，每次扩充均涉及内
+存重新申请与数据全量复制，导致实际计算开销显著高于理论复杂度。针对这一问题，C++实现采用预分配策略：在初始化阶段为所有相关矩阵变量预留两倍
+容量的连续内存空间，诱导点扩充时直接写入预留区域，从而彻底避免动态内存分配与数据搬运操作。当预留空间耗尽时，系统将拒绝后续扩充请求，以保障
+算法行为的确定性与内存安全性。
+
+在MPC问题构建方面，CasADi的原生数据结构\texttt{DM}在大规模矩阵运算中效率较低，不适合作为中间计算载体。为此，本文将代价矩阵、约束矩阵等
+MPC问题要素的构建工作交由Eigen库\cite{eigenweb}完成，充分利用其高效的线性代数运算能力；构建完成后，通过\texttt{memcpy}将结果直接写入
+\texttt{DM}矩阵并传入求解器。该方案显著降低了MPC问题的构建耗时，提升了整体控制回路的实时性。
+
 \section{实验数据与分析}
 
 \subsection{GP初始化和超参数的选择}
+我们以变分FITC高斯过程回归方法为模型，以实车数据$X \in \mathbb R^{220 \times 12}, Y \in \mathbb R^{220 \times 1}$，
+探究历史数据窗口$T$和诱导点数量
+$M$的选择对预测精度的影响。实验结果如\autoref{fig:compare_t_m}所示。
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1.0\linewidth]{gpmpc/compare_t_m.png}
+    \caption{历史数据窗口$T$（左）与诱导点数量$M$（右）对GPR预测精度的影响。}
+    \label{fig:compare_t_m}
+\end{figure}
 
-我们从FITC出发，探究$T$的选择对预测精度的影响。
+\textbf{历史窗口$T$的影响。}固定诱导点数量，将$T$从1增大至5，MAE由0.006802单调下降至0.006493，RMSE由0.008426降至0.008037，降幅分别
+约为4.5\%和4.6\%。这表明引入更长的历史状态序列作为输入特征，有助于GP模型捕捉系统的时序动态特性，从而提升残差预测精度。然而，随着$T$增大，
+性能提升的边际效益逐渐递减：$T$从4增至5时，MAE与RMSE的改善幅度均已低于0.1\%。此外，$T$的增大意味着输入特征维度
+$D=4T$线性增长，将加重核函数计算与在线更新的计算负担。综合预测精度与计算效率的考量，本文选取
+$T=3$作为默认配置。
+
+\textbf{诱导点数量$M$的影响。}固定历史窗口$T=3$，将$M$
+从5增大至60，MAE由0.003813降至0.003573，RMSE由0.005237降至0.005013，降幅分别约为6.3\%和4.3\%。整体趋势表明，增加诱导点数量能够提升稀疏
+GP对训练数据分布的近似质量，进而改善预测精度。考虑到诱导点数量直接决定GP推断的计算复杂度（矩阵运算规模为$\mathcal{O}(M^2)$），
+且后续会执行在线更新，本文选取
+$M=40$作为默认配置，在精度与效率之间取得较好的平衡。
+
+\subsection{Python仿真测试}
+
+\subsubsection{实验设置}
+
+仿真实验基于Python平台搭建，MPC求解器采用OSQP，预测时域为40步，
+控制周期$\Delta t = 0.05\,\text{s}$，对应预测时长2\,s。
+状态代价矩阵与终端代价矩阵分别设置为
+\begin{equation}
+    Q = \mathrm{diag}(100,\ 10,\ 100,\ 1,\ 0,\ \ldots,\ 0),\quad
+    Q_f = \mathrm{diag}(200,\ 20,\ 200,\ 2,\ 0,\ \ldots,\ 0),
+\end{equation}
+控制代价矩阵$R = \mathrm{diag}(0.1,\ 0.1)$。
+控制输入约束为线加速度$|a| \leq 1\,\text{m/s}^2$、
+角加速度$|\delta| \leq 1.5\,\text{rad/s}^2$，
+控制增量约束均设为$|\Delta a|,\, |\Delta \delta| \leq 5$。
+
+两种故障工况的仿真设置如下。通信延迟工况：在控制回路中引入
+3步（100\,ms）的固定延迟，即控制器在第$k$步执行的实际为第$k-3$步
+计算得到的控制指令，模拟实际系统中通信链路延迟导致的模型失配场景。
+单侧驱动力不足工况：通过对左右轮效率系数分别设置为
+$\eta_L = 0.95$、$\eta_R = 1.00$来模拟单侧执行器部分失效，
+实际输出的线速度与角速度由下式计算：
+\begin{equation}
+    v = \frac{2v_{\text{cmd}}(\eta_R + \eta_L) 
+    + L\,\omega_{\text{cmd}}(\eta_R - \eta_L)}{4}, \quad
+    \omega = \frac{2v_{\text{cmd}}(\eta_R - \eta_L) 
+    + L\,\omega_{\text{cmd}}(\eta_R + \eta_L)}{2L},
+\end{equation}
+其中$L = 0.35\,\text{m}$为机器人轴距，$v_{\text{cmd}}$和$\omega_{\text{cmd}}$
+为MPC输出的名义控制指令。
+
+噪声实验中，在线速度$v$和角速度$\omega$的观测量上叠加独立的高斯白噪声，
+标准差均为$\sigma = 0.01$，即
+\begin{equation}
+    \tilde{v} = v + \varepsilon_v, \quad
+    \tilde{\omega} = \omega + \varepsilon_\omega, \quad
+    \varepsilon_v,\, \varepsilon_\omega \sim \mathcal{N}(0,\, 0.01^2).
+\end{equation}
+
+\subsubsection{GP-MPC控制性能验证}
+
+\textbf{通信延迟工况} \quad
+在100\,ms通信延迟工况下，名义模型MPC由于无法补偿控制指令的传输延迟，
+控制器在每个时间步均基于过时的状态反馈执行滚动优化，导致跟踪误差在
+闭环中持续积累，最终横向误差与航向误差分别发散至0.506\,m和0.415\,rad，
+机器人彻底偏离参考轨迹。这一现象表明，在存在显著通信延迟的场景下，
+仅依赖名义运动学模型的MPC不具备足够的鲁棒性。相比之下，零阶GP-MPC
+与一阶GP-MPC均能稳定跟踪参考轨迹，验证了GP残差补偿机制对延迟引起
+的模型失配的有效修正能力。
+
+\autoref{fig:delay3n_comparison} 展示了三种方法在带噪声延迟工况下的控制
+仿真效果，\autoref{fig:delay3n_error} 给出了对应的轨迹跟踪曲线与误差曲线，
+定量结果汇总于\autoref{tab:sim_results}。
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/delay3n_nominal.png}
+        \caption{名义模型}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/delay3n_trained.png}
+        \caption{零阶GP-MPC}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/delay3n_trained_g.png}
+        \caption{一阶GP-MPC}
+    \end{subfigure}
+    \caption{带噪声通信延迟工况下三种方法的轨迹跟踪效果对比。}
+    \label{fig:delay3n_comparison}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/delay3n_nominal_error.png}
+        \caption{名义模型}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/delay3n_trained_error.png}
+        \caption{零阶GP-MPC}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/delay3n_trained_g_error.png}
+        \caption{一阶GP-MPC}
+    \end{subfigure}
+    \caption{带噪声通信延迟工况下三种方法的控制效果（上）及横向误差（红色）
+    与航向误差（橙色）曲线（下）。}
+    \label{fig:delay3n_error}
+\end{figure}
+
+在残差预测精度方面，\autoref{fig:delay3n_dvdw} 对比了名义模型与GP模型对
+线速度残差$\Delta v$和角速度残差$\Delta \omega$的预测误差曲线，
+定量结果汇总于\autoref{tab:dvdw_results}。
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}{0.48\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/delay3n_trained_dvdw.png}
+        \caption{零阶GP-MPC}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/delay3n_trained_g_dvdw.png}
+        \caption{一阶GP-MPC}
+    \end{subfigure}
+    \caption{带噪声通信延迟工况下名义模型预测与GP模型预测的残差对比。}
+    \label{fig:delay3n_dvdw}
+\end{figure}
+
+由\autoref{tab:dvdw_results} 可见，在有噪声条件下，一阶GP-MPC对
+$\Delta v$和$\Delta \omega$的预测误差相较于名义模型分别降低约70.0\%和
+76.2\%，展现出对延迟工况残差动力学的较强学习能力。零阶GP-MPC在
+$\Delta \omega$方向的改善幅度（37.5\%）亦较为明显，但$\Delta v$方向的
+预测误差（0.159）反而高于其对应的名义预测基准（0.082），
+这可能与该方向残差的非线性程度较高、零阶近似的线性化误差较大有关。
+在控制精度上，两种GP-MPC方案的横向误差均值均在0.003\,m以内，
+相互差异较小，说明两种近似方案在该工况下均能实现有效的模型失配补偿，
+控制性能的差距较残差预测精度的差距更为有限。
+
+\textbf{单侧驱动力不足工况} \quad
+在单侧车轮驱动力不足工况下，名义模型MPC虽未发生轨迹发散，
+但由于执行器部分失效导致系统动力学特性产生持续偏移，横向误差均值
+达到0.030\,m，最大横向误差为0.041\,m，反映出名义模型对此类故障工况
+的补偿能力不足。
+
+\autoref{fig:badn_comparison}、\autoref{fig:badn_error} 和
+\autoref{fig:badn_dvdw} 分别展示了三种方法在带噪声驱动力不足工况下的
+轨迹跟踪效果、误差曲线与残差预测对比。
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/badn_nominal.png}
+        \caption{名义模型}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/badn_trained.png}
+        \caption{零阶GP-MPC}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/badn_trained_g.png}
+        \caption{一阶GP-MPC}
+    \end{subfigure}
+    \caption{带噪声单侧驱动力不足工况下三种方法的轨迹跟踪效果对比。}
+    \label{fig:badn_comparison}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/badn_nominal_error.png}
+        \caption{名义模型}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/badn_trained_error.png}
+        \caption{零阶GP-MPC}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.32\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/badn_trained_g_error.png}
+        \caption{一阶GP-MPC}
+    \end{subfigure}
+    \caption{带噪声单侧驱动力不足工况下三种方法的控制效果（上）及
+    横向误差（红色）与航向误差（橙色）曲线（下）。}
+    \label{fig:badn_error}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}{0.48\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/badn_trained_dvdw.png}
+        \caption{零阶GP-MPC}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \includegraphics[width=\linewidth]{gpmpc/badn_trained_g_dvdw.png}
+        \caption{一阶GP-MPC}
+    \end{subfigure}
+    \caption{带噪声单侧驱动力不足工况下名义模型预测与GP模型预测的残差对比。}
+    \label{fig:badn_dvdw}
+\end{figure}
+
+在该工况下，两种GP-MPC方法均将横向误差均值压缩至0.002\,m以内，
+相较于名义模型降幅超过93\%，控制效果得到显著改善。
+在残差预测方面，由\autoref{tab:dvdw_results} 可见，两种方法对
+$\Delta \omega$的预测误差均实现大幅压缩，改善幅度超过92\%，
+反映出GP模型对执行器失效所引起的角速度动态偏移具有较强的学习能力。
+一阶GP-MPC在无噪声条件下的残差预测精度（$\Delta v$降低99.8\%，
+$\Delta \omega$降低99.9\%）显著优于有噪声条件（57.4\%，93.9\%），
+说明观测噪声对一阶近似的均值传播修正存在一定干扰，
+但即便在有噪声条件下，一阶方案仍优于或与零阶方案相当。
+在控制精度上，一阶GP-MPC的横向误差均值（0.000783\,m）略优于
+零阶（0.001320\,m），表明更精确的不确定性传播对最终控制性能
+有一定的正向贡献。
+
+\textbf{综合对比与小结} \quad 
+\autoref{tab:sim_results} 与\autoref{tab:dvdw_results} 分别汇总了
+两种工况下各方法的控制精度与残差预测精度。
+
+\begin{table}[htbp]
+\centering
+\caption{仿真实验控制精度汇总}
+\label{tab:sim_results}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llcccccc}
+    \toprule
+    \multirow{2}{*}{工况} & \multirow{2}{*}{方法}
+        & \multicolumn{3}{c}{有噪声}
+        & \multicolumn{3}{c}{无噪声} \\
+    \cmidrule(lr){3-5} \cmidrule(lr){6-8}
+    & & 均值横向 (m) & 均值航向 (rad) & 最大横向 (m)
+      & 均值横向 (m) & 均值航向 (rad) & 最大横向 (m) \\
+    \midrule
+    \multirow{3}{*}{延迟工况}
+     & 名义模型    & 0.0558 & 0.2188 & 0.5063
+                  & 0.0526 & 0.2079 & 0.5058 \\
+     & 零阶GP-MPC & 0.0028 & \textbf{0.0065} & 0.0095
+                  & 0.0028 & \textbf{0.0097} & \textbf{0.0060} \\
+     & 一阶GP-MPC & \textbf{0.0027} & 0.0075 & \textbf{0.0071}
+                  & \textbf{0.0025} & 0.0106 & 0.0087 \\
+    \midrule
+    \multirow{3}{*}{驱动力不足}
+     & 名义模型    & 0.0297 & 0.0248 & 0.0411
+                  & 0.0291 & 0.0212 & 0.0422 \\
+     & 零阶GP-MPC & 0.0013 & 0.0058 & 0.0030
+                  & 0.0018 & \textbf{0.0034} & \textbf{0.0042} \\
+     & 一阶GP-MPC & \textbf{0.0008} & \textbf{0.0054} & \textbf{0.0022}
+                  & \textbf{0.0018} & 0.0044 & 0.0043 \\
+    \bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{仿真实验残差预测精度对比（相较名义模型预测误差降低百分比）}
+\label{tab:dvdw_results}
+\begin{tabular}{llcccc}
+    \toprule
+    \multirow{2}{*}{工况} & \multirow{2}{*}{方法}
+        & \multicolumn{2}{c}{无噪声}
+        & \multicolumn{2}{c}{有噪声} \\
+    \cmidrule(lr){3-4} \cmidrule(lr){5-6}
+    & & $\Delta v$ & $\Delta \omega$
+      & $\Delta v$ & $\Delta \omega$ \\
+    \midrule
+    \multirow{2}{*}{延迟工况}
+     & 零阶GP-MPC & -110.0\%          & 71.6\%          & $-$94.7\% & 37.5\%          \\
+     & 一阶GP-MPC & \textbf{80.0\%} & \textbf{97.8\%} & \textbf{70.0\%}   & \textbf{76.2\%} \\
+    \midrule
+    \multirow{2}{*}{驱动力不足}
+     & 零阶GP-MPC & 82.4\%          & 99.0\%          & 53.8\%          & 92.7\%          \\
+     & 一阶GP-MPC & \textbf{99.8\%} & \textbf{99.9\%} & \textbf{57.4\%} & \textbf{93.9\%} \\
+    \bottomrule
+\end{tabular}
+\end{table}
+
+综合两组实验，可以得出以下结论。
+
+1. GP补偿的必要性：在通信延迟工况下，GP残差补偿将名义模型的发散
+行为完全消除；在驱动力不足工况下，横向误差均值降低幅度超过93\%。
+两组实验均表明，基于GP的残差学习能够有效弥补名义模型在异常工况下
+的动力学失配，是提升MPC鲁棒性的关键手段。
+
+2. 零阶与一阶近似的比较：一阶GP-MPC在残差预测精度上整体优于
+零阶GP-MPC，尤其在无噪声条件下优势更为突出；然而在控制精度层面，
+两者差距较小，说明一阶近似对预测质量的提升并未等比例转化为控制性能
+的提升，零阶近似在计算开销更低的前提下已能取得接近的控制效果。
+
+3. 噪声鲁棒性：有噪声与无噪声条件下各方法的控制精度相对排序
+高度一致，有噪声场景下的残差预测精度有所下降但仍保持显著改善，
+表明所提GP-MPC框架对观测噪声具有良好的鲁棒性，具备在真实环境中
+部署的基础条件。
+
+\subsubsection{在线学习和自适应更新}
+
+为验证所提出OSVGP模型在分布变化场景下的在线适应能力，
+设计“训练-测试工况不一致”的实验：首先在存在系统性偏差的
+单侧轮子驱动力不足工况数据上离线训练模型，随后在正常工况下执行控制任务，
+并通过在线更新逐步修正模型。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.48\textwidth]{gpmpc/lateral_error.pdf}
+    \includegraphics[width=0.48\textwidth]{gpmpc/heading_error.pdf}
+    \caption{在线学习过程中跟踪误差随更新轮次的变化}
+    \label{fig:online_learning}
+\end{figure}
+
+考虑三种不同策略：（1）使用训练好的核函数参数，仅更新变分参数；
+（2）使用未训练的核函数参数，仅进行在线更新；
+（3）在（2）的基础上进一步引入诱导点增量扩充机制。
+实验结果如\autoref{fig:online_learning}与\autoref{tab:online_learning}所示。
+
+从结果可以看出，Exp1（仅更新、已训练核参数）在初期能够略微降低横向误差，
+但整体性能提升有限，并在后期出现回退现象。这表明，当核函数超参数与当前工况
+存在失配时，仅依赖变分参数更新难以充分修正模型偏差。但核函数超参数的在线优化在计算时间上是无法接受的，因此本文会
+在使用更新算法时采用非最优核函数参数。
+
+相比之下，Exp2（未训练核参数）表现出显著的自适应能力，
+均值横向误差由初始的0.039597\,m下降至0.003521\,m，
+说明在线变分推断能够逐步重构后验分布，从而有效补偿模型误差。
+
+\begin{table}[htbp]
+\centering
+\caption{在线学习与自适应更新实验结果}
+\label{tab:online_learning}
+\begin{tabular}{lcccccc}
+\toprule
+\multirow{2}{*}{方法} & \multicolumn{3}{c}{均值横向误差 (m)} & \multicolumn{3}{c}{均值航向误差 (rad)} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
+ & round 0 & round 4 & round 10 & round 0 & round 4 & round 10 \\
+\midrule
+Exp1 
+& 0.049207 & 0.036505 & 0.049348 
+& 0.026108 & 0.041252 & 0.026934 \\
+
+Exp2 
+& 0.039597 & 0.008711 & 0.003521 
+& 0.025079 & 0.021008 & 0.012641 \\
+
+Exp3 
+& 0.039485 & 0.002121 & \textbf{0.001273} 
+& 0.028827 & 0.007463 & \textbf{0.005354} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+进一步地，Exp3在引入诱导点增量扩充后性能提升最为显著，
+仅经过少量更新轮次（round 2）即可将横向误差降至$10^{-3}$量级，
+最终稳定在0.001273\,m。航向误差亦呈现类似趋势。
+这表明，诱导点的动态扩展能够增强模型在新状态空间区域的表达能力，
+避免因表示能力不足导致的逼近误差。
+
+综合来看，核函数超参数并非最优时，所提出的OSVGP不仅具备持续在线更新能力，
+还能够通过诱导点自适应扩展实现快速分布迁移，
+从而在模型失配场景下显著提升GP-MPC的控制性能与鲁棒性。
+
+\subsubsection{方差感知代价函数测试}
+
+本实验在一阶GP-MPC框架下，以通信延迟工况为测试场景，
+对方差感知代价函数中的权重参数$\lambda_v$和$\lambda_\omega$进行敏感性分析。
+方差感知窗口长度固定为40步，与预测时域一致。
+实验依次将$(\lambda_v, \lambda_\omega)$设置为$(0,0)$、$(1,1)$、$(5,5)$和$(10,10)$，
+其中$(0,0)$对应不启用方差感知的基线配置。
+定量结果汇总于\autoref{tab:aware_results}。
+
+\begin{table}[htbp]
+\centering
+\caption{方差感知权重消融实验结果（通信延迟工况，一阶GP-MPC）}
+\label{tab:aware_results}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccc}
+    \toprule
+    \multirow{2}{*}{$(\lambda_v,\,\lambda_\omega)$}
+        & \multicolumn{3}{c}{有噪声}
+        & \multicolumn{3}{c}{无噪声} \\
+    \cmidrule(lr){2-4} \cmidrule(lr){5-7}
+    & 均值横向 (m) & 均值航向 (rad) & 最大横向 (m)
+    & 均值横向 (m) & 均值航向 (rad) & 最大横向 (m) \\
+    \midrule
+    $(0,\;0)$   & 0.002712 & 0.013277 & 0.013780
+                & 0.002554 & 0.010579 & 0.008711 \\
+    $(1,\;1)$   & 0.001568 & 0.007722 & 0.005254
+                & 0.002496 & 0.008446 & 0.007205 \\
+    $(5,\;5)$   & \textbf{0.001034} & \textbf{0.003447} & \textbf{0.002660}
+                & \textbf{0.000764} & 0.005499 & \textbf{0.001950} \\
+    $(10,\;10)$ & 0.001786 & 0.006685 & 0.003623
+                & 0.001030 & \textbf{0.002995} & 0.002421 \\
+    \bottomrule
+\end{tabular}%
+}
+\end{table}
+
+由\autoref{tab:aware_results}可见，引入方差感知项后，各项控制精度指标
+相较基线配置均有不同程度改善，表明该机制能够有效提升轨迹跟踪性能。
+
+在有噪声条件下，$(\lambda_v, \lambda_\omega)=(5,5)$时综合表现最优，
+均值横向误差由基线的0.0027\,m降至0.001034\,m，降幅约61.9\%，
+最大横向误差由0.013780\,m降至0.002660\,m，降幅达80.7\%。
+在无噪声条件下，$(5,5)$同样取得最优结果，
+均值横向误差降至0.000764\,m，较基线改善约70.1\%。
+上述结果表明，适度增大方差感知权重能够引导优化器规避预测不确定性较高的区域，从而降低跟踪误差。
+
+当权重进一步增大至$(10,10)$时，有噪声条件下的均值横向误差
+（0.001786\,m）较$(5,5)$有所上升，说明过大的方差惩罚会使优化器趋于保守，
+在规避不确定性的同时牺牲部分跟踪性能，导致控制效果出现退化。
+
+综合有噪声与无噪声两种工况，$(\lambda_v, \lambda_\omega)=(5,5)$在跟踪精度与不确定性规避之间取得了较优平衡，
+因此本文采用该组权重作为默认配置。
+
+\subsection{实车实验数据和分析}

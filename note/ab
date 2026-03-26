@@ -55,3 +55,292 @@ Error:  RMSE         MAE          NLL          Time(ms)
 osvgp:  +00.035552,  +00.027586,  -01.564593,  118.7287
 Error:  RMSE         MAE          NLL          Time(ms)
 agp:    +00.039046,  +00.029938,  -01.056663,  134.2655
+
+delay1 to delay1
+----------------------------------------------------------------
+T = 1
+Criterion       No-Predict      MPC-Predict     GPR-Predict
+MAE             0.000000        0.007554        0.006802
+RMSE            0.000000        0.009197        0.008426
+
+T = 2
+Criterion       No-Predict      MPC-Predict     GPR-Predict
+MAE             0.000000        0.007573        0.006613
+RMSE            0.000000        0.009213        0.008208
+
+T = 3
+Criterion       No-Predict      MPC-Predict     GPR-Predict
+MAE             0.000000        0.007581        0.006540
+RMSE            0.000000        0.009224        0.008119
+
+T = 4
+Criterion       No-Predict      MPC-Predict     GPR-Predict
+MAE             0.000000        0.007591        0.006503
+RMSE            0.000000        0.009237        0.008067
+
+T = 5
+Criterion       No-Predict      MPC-Predict     GPR-Predict
+MAE             0.000000        0.007614        0.006493
+RMSE            0.000000        0.009254        0.008037
+---------------------------------------------------------------
+M = 5
+Criterion       No-Predict      MPC-Predict     GPR-Predict
+MAE             0.000000        0.007581        0.003813
+RMSE            0.000000        0.009224        0.005237
+
+M = 10
+Criterion       No-Predict      MPC-Predict     GPR-Predict
+MAE             0.000000        0.007581        0.003663
+RMSE            0.000000        0.009224        0.005108
+
+M = 20
+Criterion       No-Predict      MPC-Predict     GPR-Predict
+MAE             0.000000        0.007581        0.003672
+RMSE            0.000000        0.009224        0.005118
+
+M = 40
+Criterion       No-Predict      MPC-Predict     GPR-Predict
+MAE             0.000000        0.007581        0.003590
+RMSE            0.000000        0.009224        0.005036
+
+M = 60
+Criterion       No-Predict      MPC-Predict     GPR-Predict
+MAE             0.000000        0.007581        0.003573
+RMSE            0.000000        0.009224        0.005013
+
+
+
+
+Delay3
+-------------------------------------------------------
+Delay3_trained
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    +0.000885, -0.018720 |
+Max   lateral, heading error:    +0.006023, +0.034521 |
+Mean  lateral, heading error:    +0.002760, +0.009741 |
+=======================================================
+Mean MAE nom dv and dw:   +0.079598, +0.139725
+Mean MAE gpr dv and dw:   +0.167869, +0.039511
+
+Delay3_trained_g
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    -0.002280, +0.006757 |
+Max   lateral, heading error:    +0.008711, +0.068250 |
+Mean  lateral, heading error:    +0.002554, +0.010579 |
+=======================================================
+Mean MAE nom dv and dw:   +0.087561, +0.122971
+Mean MAE gpr dv and dw:   +0.017544, +0.002712
+
+Delay3_nominal (diverge from traj)
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    +0.505806, +0.283286 |
+Max   lateral, heading error:    +0.505806, +0.734951 |
+Mean  lateral, heading error:    +0.052641, +0.207927 |
+=======================================================
+
+Delay3 Noise
+-------------------------------------------------------
+Delay3_trained
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    +0.001667, +0.021667 |
+Max   lateral, heading error:    +0.009561, +0.027168 |
+Mean  lateral, heading error:    +0.002817, +0.006484 |
+=======================================================
+Mean MAE nom dv and dw:   +0.081578, +0.093925
+Mean MAE gpr dv and dw:   +0.158892, +0.058710
+
+Delay3_trained_g
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    -0.000910, +0.002363 |
+Max   lateral, heading error:    +0.007141, +0.041679 |
+Mean  lateral, heading error:    +0.002686, +0.007547 |
+=======================================================
+Mean MAE nom dv and dw:   +0.174631, +0.165414
+Mean MAE gpr dv and dw:   +0.052407, +0.039265
+
+Delay3_nominal (diverge from traj)
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    +0.506317, +0.414986 |
+Max   lateral, heading error:    +0.506317, +0.719309 |
+Mean  lateral, heading error:    +0.055812, +0.218812 |
+=======================================================
+
+Bad Wheel
+-------------------------------------------------------
+Bad_trained
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    +0.002111, +0.000146 |
+Max   lateral, heading error:    +0.004247, +0.009605 |
+Mean  lateral, heading error:    +0.001763, +0.003382 |
+=======================================================
+Mean MAE nom dv and dw:   +0.135043, +0.785441
+Mean MAE gpr dv and dw:   +0.023861, +0.007972
+
+Bad_trained_g
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    +0.004295, -0.002987 |
+Max   lateral, heading error:    +0.004295, +0.021220 |
+Mean  lateral, heading error:    +0.001776, +0.004380 |
+=======================================================
+Mean MAE nom dv and dw:   +0.136679, +0.788279
+Mean MAE gpr dv and dw:   +0.000188, +0.000580
+
+Bad_nominal
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    +0.033001, +0.000778 |
+Max   lateral, heading error:    +0.042155, +0.100064 |
+Mean  lateral, heading error:    +0.029068, +0.021166 |
+=======================================================
+
+Bad Wheel Noise
+-------------------------------------------------------
+Bad_trained
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    +0.002523, -0.007687 |
+Max   lateral, heading error:    +0.002966, +0.017679 |
+Mean  lateral, heading error:    +0.001320, +0.005782 |
+=======================================================
+Mean MAE nom dv and dw:   +0.141972, +0.791312
+Mean MAE gpr dv and dw:   +0.065603, +0.057591
+
+Bad_trained_g
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    -0.000884, +0.002156 |
+Max   lateral, heading error:    +0.002236, +0.017310 |
+Mean  lateral, heading error:    +0.000783, +0.005443 |
+=======================================================
+Mean MAE nom dv and dw:   +0.179204, +0.778460
+Mean MAE gpr dv and dw:   +0.076364, +0.047221
+
+Bad_nominal
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    +0.033719, +0.004139 |
+Max   lateral, heading error:    +0.041124, +0.106238 |
+Mean  lateral, heading error:    +0.029702, +0.024816 |
+=======================================================
+
+
+Noise
+Aware [0, 0]
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    +0.001092, +0.000846 |
+Max   lateral, heading error:    +0.013780, +0.097531 |
+Mean  lateral, heading error:    +0.002712, +0.013277 |
+=======================================================
+Aware [1, 1]
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    -0.001153, +0.006680 |
+Max   lateral, heading error:    +0.005254, +0.047422 |
+Mean  lateral, heading error:    +0.001568, +0.007722 |
+=======================================================
+Aware [5, 5]
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    +0.000515, +0.007786 |
+Max   lateral, heading error:    +0.002660, +0.014680 |
+Mean  lateral, heading error:    +0.001034, +0.003447 |
+=======================================================
+Aware [10, 10]
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    -0.002209, +0.007498 |
+Max   lateral, heading error:    +0.003623, +0.030857 |
+Mean  lateral, heading error:    +0.001786, +0.006685 |
+=======================================================
+
+No-Noise
+Aware [0, 0]
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    -0.002280, +0.006757 |
+Max   lateral, heading error:    +0.008711, +0.068250 |
+Mean  lateral, heading error:    +0.002554, +0.010579 |
+=======================================================
+Aware [1, 1]
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    +0.003130, +0.000683 |
+Max   lateral, heading error:    +0.007205, +0.054368 |
+Mean  lateral, heading error:    +0.002496, +0.008446 |
+=======================================================
+Aware [5, 5]
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    -0.001106, +0.007472 |
+Max   lateral, heading error:    +0.001950, +0.020178 |
+Mean  lateral, heading error:    +0.000764, +0.005499 |
+=======================================================
+Aware [10, 10]
+=======================================================
+           SIMULATION PERFORMANCE SUMMARY
+=======================================================
+Final lateral, heading error:    +0.002011, +0.005229 |
+Max   lateral, heading error:    +0.002421, +0.014139 |
+Mean  lateral, heading error:    +0.001030, +0.002995 |
+=======================================================
+
+
+
+<------------------------------------------------------------>
+We trained a model with bad_wheel then run it with good_wheel
+round 0 is before update
+<------------------------------------------------------------>
+Experiment 1: with trained kernel parameters (only update)
+--------------------------------------------------------------
+round 0:  Mean  lateral, heading error:    +0.049207, +0.026108 |
+round 2:  Mean  lateral, heading error:    +0.044530, +0.029987 |
+round 4:  Mean  lateral, heading error:    +0.036505, +0.041252 |
+round 6:  Mean  lateral, heading error:    +0.036680, +0.042042 |
+round 8:  Mean  lateral, heading error:    +0.045008, +0.031134 |
+round 10: Mean  lateral, heading error:    +0.049348, +0.026934 |
+--------------------------------------------------------------
+Experiment 2: with non-trained kernel parameters (inducing points Z still trained) (only update)
+--------------------------------------------------------------
+round 0:  Mean  lateral, heading error:    +0.039597, +0.025079 |
+round 2:  Mean  lateral, heading error:    +0.017144, +0.025109 |
+round 4:  Mean  lateral, heading error:    +0.008711, +0.021008 |
+round 6:  Mean  lateral, heading error:    +0.005836, +0.016497 |
+round 8:  Mean  lateral, heading error:    +0.004147, +0.013932 |
+round 10: Mean  lateral, heading error:    +0.003521, +0.012641 |
+--------------------------------------------------------------
+Experiment 3: with non-trained kernel parameters (inducing points Z still trained) (update and add)
+--------------------------------------------------------------
+round 0:  Mean  lateral, heading error:    +0.039485, +0.028827 |
+round 2:  Mean  lateral, heading error:    +0.003383, +0.010837 |
+round 4:  Mean  lateral, heading error:    +0.002121, +0.007463 |
+round 6:  Mean  lateral, heading error:    +0.002028, +0.007696 |
+round 8:  Mean  lateral, heading error:    +0.001495, +0.006498 |
+round 10: Mean  lateral, heading error:    +0.001273, +0.005354 |
