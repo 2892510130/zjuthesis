@@ -934,126 +934,248 @@ Exp3
 因此本文采用该组权重作为默认配置。
 
 \subsection{实车实验数据和分析}
-
-本节在真实车辆平台上对所提GP-MPC框架进行验证，测试场景与Python仿真保持一致，
-包括通信延迟工况与单侧驱动力不足工况。实验中对比了名义模型MPC（Nominal）、
-已优化超参数的零阶GP-MPC（0-GP-MPC Trained）与一阶GP-MPC（1-GP-MPC Trained），
-以及基于默认超参数的在线自适应更新方案（Non-trained），
-后者通过多轮非增量更新与增量更新逐步适应目标工况。
-所有方法的计算均在实车嵌入式平台上以C++实现，控制周期为50\,ms。
-
-\paragraph{已优化超参数方案的控制性能}
-
-\autoref{fig:real_trained_compare} 汇总了名义模型与两种已训练GP-MPC方案在两种
-工况下的均值横向误差与均值航向误差。
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=1.0\linewidth]{gpmpc/real_trained_compare.pdf}
-    \caption{实车实验中名义模型与已训练GP-MPC方案的控制精度对比。}
-    \label{fig:real_trained_compare}
-\end{figure}
-
-在通信延迟工况下，名义模型的均值横向误差为0.00583\,m，均值航向误差为
-0.01809\,rad；零阶GP-MPC将横向误差降至0.00341\,m（降幅41.5\%），
-一阶GP-MPC进一步降至0.00299\,m（降幅48.7\%）。
-在单侧驱动力不足工况下，名义模型横向误差高达0.03090\,m，
-零阶GP-MPC将其压缩至0.00395\,m（降幅87.2\%），
-一阶GP-MPC降至0.00309\,m（降幅90.0\%）。
-两种工况下GP残差补偿均显著改善了轨迹跟踪精度，
-一阶GP-MPC相较于零阶方案在控制精度上有进一步提升，
-这与Python仿真实验的结论一致。
-
-\autoref{fig:real_dvdw_compare} 对比了各方案对线速度残差$\Delta v$与
-角速度残差$\Delta \omega$的预测误差（MAE）。
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=1.0\linewidth]{gpmpc/real_dvdw_compare.pdf}
-    \caption{实车实验中名义预测与GP预测的残差误差对比（已训练超参数）。}
-    \label{fig:real_dvdw_compare}
-\end{figure}
-
-在延迟工况下，零阶GP-MPC将$\Delta v$残差MAE由名义预测的1.095降至0.402
-（降幅63.3\%），$\Delta \omega$由1.850降至1.133（降幅38.8\%）；
-一阶GP-MPC的$\Delta v$预测MAE（0.532）略高于零阶，但$\Delta \omega$
-（1.644）与零阶相比差异较小。在单侧驱动力不足工况下，
-两种GP-MPC方案对$\Delta \omega$的改善尤为显著：名义预测MAE为6.676，
-零阶GP-MPC降至0.958，一阶GP-MPC降至0.764，降幅分别达85.6\%和88.6\%，
-反映出GP模型对执行器失效引起的角速度动态偏移具有较强的在线学习能力。
-
-定量结果汇总于\autoref{tab:real_trained}。
-
+\label{subsec:real_world_exp}
+ 
+\subsubsection{实验设置}
+\label{subsubsec:exp_setup}
+ 
+实车实验平台为某型两轮差速驱动 AGV，主要参数如\autoref{tab:agv_params} 所示。
+该平台自重 130\,kg，额定负载 400\,kg，空载最大速度 1.5\,m/s，
+配备防撞条、急停按钮与深度相机等安全防护装置，
+通过 Wi-Fi 无线网络进行上位机通信。
+ 
 \begin{table}[htbp]
 \centering
-\caption{实车实验已训练方案控制精度与残差预测精度汇总}
-\label{tab:real_trained}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{llccccc}
+\caption{实验平台主要参数}
+\label{tab:agv_params}
+\begin{tabular}{llll}
     \toprule
-    工况 & 方法
-        & 均值横向 (m) & 均值航向 (rad)
-        & GPR $\Delta v$ MAE & GPR $\Delta \omega$ MAE
-        & 均值耗时 (ms) \\
+    参数 & 数值 & 参数 & 数值 \\
     \midrule
-    \multirow{3}{*}{延迟工况}
-     & 名义模型      & 0.00583 & 0.01809 & — & — & 8.61 \\
-     & 零阶GP-MPC   & 0.00341 & 0.01120 & 0.402 & 1.133 & 13.20 \\
-     & 一阶GP-MPC   & \textbf{0.00299} & \textbf{0.01037} & 0.532 & 1.644 & 13.31 \\
+    机身尺寸（$L \times W \times H$） & $823\times532\times253$\,mm
+        & 自重         & 130\,kg \\
+    额定负载     & 400\,kg
+        & 空载最大速度 & 1.5\,m/s \\
+    满载最大速度 & 1.2\,m/s
+        & 旋转直径     & 916\,mm \\
+    定位精度     & $\pm10$\,mm\,/\,$\pm1^{\circ}$
+        & 对接精度     & $\pm2$\,mm\,/\,$\pm0.2^{\circ}$ \\
+    \bottomrule
+\end{tabular}
+\end{table}
+ 
+控制程序运行于机载计算单元，执行频率为 \SI{20}{Hz}，
+控制周期 $\Delta t = 0.05\,\text{s}$。
+MPC 预测时域为 30 步，对应预测时长 1.5\,s。
+状态代价矩阵与控制代价矩阵分别设置为
+\begin{equation}
+    Q = \mathrm{diag}(10,\ 1,\ 1,\ 1,\ 0,\ \ldots,\ 0),\quad
+    R = \mathrm{diag}(0.1,\ 0.1).
+\end{equation}
+GP 模型诱导点数初始为 $M=40$，历史状态窗口长度 $T=3$。
+ 
+在实车实验中同样设置两种测试工况：
+\textbf{通信延迟工况}在机器人底层驱动接口中人为注入 \SI{50}{ms} 固定延迟，
+即控制器在第 $k$ 步执行的实际为第 $k-1$ 步计算得到的控制指令，
+模拟实际系统中通信链路延迟导致的模型失配场景。
+\textbf{单侧驱动力不足工况}则与仿真实验设置一致。
+ 
+AGV沿固定封闭参考轨迹行驶，
+以平均横向误差 $|\bar{d}|$ 与平均航向误差 $|\bar{\theta}_e|$ 衡量控制性能，
+以线速度 $v$ 和角速度 $\omega$ 的预测误差相较于名义模型的下降幅度衡量 GP
+学习质量，以线速度为例即
+\begin{equation}
+    \Delta_v = \frac{e_v^{\mathrm{nominal}} - e_v^{\mathrm{GP}}}
+               {e_v^{\mathrm{nominal}}} \times 100\%.
+\end{equation}
+
+各对比设置如下：
+\begin{itemize}
+    \item \textbf{名义 MPC}：仅使用线性化运动学名义模型，不含 GP 残差补偿；
+    \item \textbf{0-GP-MPC (Non-T)}：GP 零阶近似，核函数超参数使用全 1 默认值；
+    \item \textbf{0-GP-MPC (Trained)}：GP 零阶近似，超参数经离线最大似然估计训练；
+    \item \textbf{1-GP-MPC (Trained)}：GP 一阶泰勒近似，超参数同样经过离线训练。
+\end{itemize}
+ 
+\subsubsection{GP-MPC 控制性能验证}
+\label{subsubsec:gpmpc_perf}
+ 
+\autoref{fig:ctrl_acc} 与 \autoref{fig:pred_acc} 分别从控制精度和预测精度两个维度
+对各方法进行对比，定量结果汇总于 \autoref{tab:real_ctrl}。
+
+\textbf{通信延迟工况} \quad
+在 \SI{50}{ms} 通信延迟工况下，名义模型 MPC 由于无法补偿控制指令的传输延迟，
+横向误差均值达到 \SI{5.0}{mm}，航向误差均值达到 \SI{0.018}{rad}，
+跟踪精度明显劣化。相比之下，三种 GP-MPC 变体均能稳定跟踪参考轨迹，
+验证了 GP 残差补偿机制对延迟引起的模型失配的有效修正能力。
+ 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{gpmpc/fig1_control_accuracy.pdf}
+    \caption{两种工况下各方法的平均横向误差与平均航向误差对比。
+             深色柱为横向误差，浅色斜线柱为航向误差。}
+    \label{fig:ctrl_acc}
+\end{figure}
+ 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\linewidth]{gpmpc/fig2_prediction_accuracy.pdf}
+    \caption{各 GP-MPC 变体在两种工况下的预测误差改善幅度（相较于名义模型）。
+             深色柱为线速度 $v$，浅色斜线柱为角速度 $\omega$。}
+    \label{fig:pred_acc}
+\end{figure}
+ 
+\begin{table}[htbp]
+\centering
+\caption{实车实验控制精度与预测精度汇总}
+\label{tab:real_ctrl}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llcccc}
+    \toprule
+    \multirow{2}{*}{工况} & \multirow{2}{*}{方法}
+        & \multicolumn{2}{c}{控制精度}
+        & \multicolumn{2}{c}{预测精度改善} \\
+    \cmidrule(lr){3-4} \cmidrule(lr){5-6}
+    & & $|\bar d|$ (mm) & $|\bar \theta_e|$ (rad)
+      & $\Delta_v$ (\%) & $\Delta_\omega$ (\%) \\
     \midrule
-    \multirow{3}{*}{驱动力不足}
-     & 名义模型      & 0.03090 & 0.02087 & — & — & 9.85 \\
-     & 零阶GP-MPC   & 0.00395 & 0.00727 & 0.321 & 0.958 & 14.68 \\
-     & 一阶GP-MPC   & \textbf{0.00309} & \textbf{0.00505} & 0.297 & 0.764 & 13.54 \\
+    正常工况（基线）& 名义 MPC        & 2.5  & 0.005 & —    & —     \\
+    \midrule
+    \multirow{4}{*}{50ms 延迟}
+     & 名义 MPC        & 5.0  & 0.018 & —     & —     \\
+     & 0-GP (Non-T)   & \textbf{2.6}  & \textbf{0.009} & 61.61 & \textbf{42.93} \\
+     & 0-GP (Trained) & 3.4  & 0.011 & \textbf{63.30} & 28.92 \\
+     & 1-GP (Trained) & 3.0  & 0.010 & 53.91 & 17.82 \\
+    \midrule
+    \multirow{4}{*}{单侧驱动力不足}
+     & 名义 MPC        & 30.0 & 0.020 & —     & —     \\
+     & 0-GP (Non-T)   & \textbf{3.0}  & 0.010 & 77.65 & 86.45 \\
+     & 0-GP (Trained) & 4.0  & 0.007 & 80.95 & 85.54 \\
+     & 1-GP (Trained) & \textbf{3.0}  & \textbf{0.005} & \textbf{82.94} & \textbf{88.62} \\
     \bottomrule
 \end{tabular}%
 }
 \end{table}
-
-从计算耗时来看，GP-MPC方案的均值耗时约为13--15\,ms，95百分位耗时不超过
-29\,ms，均满足50\,ms控制周期的实时性要求，验证了C++实现的工程可行性。
-
-\paragraph{在线自适应更新验证}
-
-在超参数未经离线优化的条件下，以单位向量$\boldsymbol{1}$初始化GP模型，
-通过单轮非增量在线更新对目标工况进行自适应。
-\autoref{fig:real_online_best} 对比了名义模型、未训练初始模型、
-单轮在线更新最优结果与已训练方案在两种工况下的控制精度。
-
+ 
+三种 GP-MPC 变体的横向误差均降至
+2.6\,mm\textasciitilde3.4\,mm，相较名义模型改善幅度超过 30\%。
+在预测精度方面，$v$ 方向的改善（54\%\textasciitilde63\%）整体高于
+$\omega$ 方向（18\%\textasciitilde43\%），
+与延迟主要影响速度响应动态的物理机制相符。
+ 
+\textbf{单侧驱动力不足工况} \quad
+在单侧驱动力不足工况下，名义模型 MPC 由于执行器部分失效导致系统动力学产生
+持续偏移，横向误差均值达到 \SI{30.0}{mm}。引入 GP 残差补偿后，
+各变体均将横向误差压缩至 3.0\,mm\textasciitilde4.0\,mm，降幅超过 87\%，
+说明 GP 模型能够有效捕捉驱动不对称带来的系统性残差。
+在预测精度方面，各方法对 $v$ 与 $\omega$ 的改善均分别超过 77\% 和 85\%，
+表明 GP 残差模型对该类系统性偏差具有极强的拟合能力。
+ 
+\textbf{综合对比与小结} \quad
+综合两组实验，可以得出以下结论。
+ 
+1. GP 补偿的必要性：两种工况下，GP 残差补偿均显著压缩了名义模型
+的跟踪误差，在单侧驱动力不足工况下横向误差降幅超过 87\%，
+表明基于 GP 的残差学习是提升 MPC 鲁棒性的有效手段。
+ 
+2. 零阶与一阶近似的比较：在控制精度层面，两者差距较小，
+0-GP (Non-T) 在延迟工况下横向误差（2.6\,mm）略优于 1-GP (Trained)（3.0\,mm），
+说明零阶近似在计算开销更低的前提下已能取得接近甚至更优的控制效果。
+与仿真结论一致，一阶近似对预测质量的提升并未等比例转化为控制性能的提升。
+ 
+3. 超参数训练的边际效益：Trained 与 Non-Trained 变体之间的误差差异
+普遍在 1\,mm 量级，说明在实车场景中默认超参数已能提供足够好的先验，
+与在线更新机制配合时，超参数的离线训练对最终控制性能的边际贡献相对有限。
+ 
+\subsubsection{GP-MPC 在线学习效果}
+\label{subsubsec:online_learning}
+ 
+本节验证 OSVGP 在线学习机制的有效性。每轮轨迹执行过程中，
+每个控制时刻 GP 变分参数执行一次在线非增量更新，
+模型参数保存下来，下一次执行时直接导入上一次执行完成后的模型。
+ 
+\autoref{fig:online_learning_real} 给出了三种实验配置下预测精度随在线学习轮次的演化曲线，
+最优跟踪误差汇总于 \autoref{tab:online_best}。
+ 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=1.0\linewidth]{gpmpc/real_online_best.pdf}
-    \caption{实车实验中名义模型、未训练初始模型、在线更新最优方案与
-    已训练方案的控制精度对比（斜线填充柱为在线更新最优结果）。}
-    \label{fig:real_online_best}
+    \includegraphics[width=\linewidth]{gpmpc/fig3_online_learning.pdf}
+    \caption{在线非增量更新预测精度随轮次变化。
+             (a) 50ms 延迟，0-GP Non-T；
+             (b) 单侧驱动力不足，0-GP Non-T；
+             (c) 单侧驱动力不足，1-GP Non-T。}
+    \label{fig:online_learning_real}
 \end{figure}
-
-在通信延迟工况下，零阶GP-MPC经单轮在线更新后均值横向误差降至
-0.00184\,m，不仅显著低于名义模型（0.00583\,m），更优于已训练的
-零阶GP-MPC方案（0.00341\,m），说明在线数据的积累能够有效弥补超参数
-未优化带来的初始精度损失，甚至超越离线训练方案。
-在单侧驱动力不足工况下，零阶GP-MPC经第1轮更新后横向误差即由初始的
-0.00302\,m降至0.00199\,m，降幅达34.1\%，表明该工况下GP模型仅需
-少量在线数据即可完成对新动力学特性的有效适应。
-
-上述结果表明，即便在缺乏离线超参数辨识的条件下，所提在线更新框架
-亦能通过单轮数据积累实现显著的自适应改善，验证了OSVGP算法在工程
-部署中对超参数优化依赖度较低的实用价值。
-
-\paragraph{综合分析}
-
-综合实车实验结果，可得出以下结论。
-
-\textbf{GP补偿的工程有效性：}在真实车辆平台上，GP残差补偿在延迟工况与
-驱动力不足工况下分别将横向误差降低约41--49\%和87--90\%，验证了所提框架
-在真实物理系统中对模型失配的补偿能力，与Python仿真结论高度吻合。
-
-\textbf{在线自适应更新的实用价值：}在超参数未优化的条件下，
-非增量在线更新方案经多轮迭代后能够达到甚至超越已训练方案的控制精度，
-说明OSVGP算法具备良好的在线自适应能力，降低了对离线超参数辨识的依赖。
-增量更新在初始轮次存在波动，适合与非增量更新结合使用。
-
-\textbf{零阶与一阶方案的工程折中：}一阶GP-MPC在残差预测精度与控制精度
-上均略优于零阶方案，但二者计算耗时接近（13.2\,ms vs 13.3\,ms），
-均满足实时性约束。在对预测精度要求较高的场景下，一阶方案具有更强的
-优势；若优先保证系统稳定性与实现简洁性，零阶方案亦为可行选择。
+ 
+\textbf{50ms 延迟工况} \quad
+如 \autoref{fig:online_learning}(a) 所示，经过两轮在线更新，
+$v$ 的预测改善从第 0 轮的 61.11\% 单调升至第 2 轮的 70.12\%，
+$\omega$ 从 42.93\% 升至 56.75\%，对应最优跟踪误差
+$|\bar d| = 2.1\,\text{mm}$、$|\bar \theta_e| = 0.0047\,\text{rad}$（第 1 轮）。
+结果表明，即便使用默认超参数，少量在线数据已足以使 GP 模型向延迟工况的
+残差分布有效收敛。
+ 
+\textbf{单侧驱动力不足工况（0-GP Non-T）} \quad
+如 \autoref{fig:online_learning}(b) 所示，$v$ 预测改善从第 0 轮的
+77.65\% 稳步提升至第 2 轮的 81.55\%，$\omega$ 从 86.45\% 升至 87.52\%。
+跟踪误差在第 1 轮达到最优（$|\bar d| = 2.0\,\text{mm}$，
+$|\bar \theta_e| = 0.007\,\text{rad}$），结合仿真中 Exp2 的结论，
+说明在线变分推断能够逐步重构后验分布，有效补偿模型误差。
+ 
+\textbf{单侧驱动力不足工况（1-GP Non-T）} \quad
+如 \autoref{fig:online_learning}(c) 所示，一阶近似在第 1 轮的预测改善
+（$v$: 51.02\%）明显低于零阶，但随轮次增加收敛速度较快，
+第 3 轮时 $v$ 和 $\omega$ 改善分别达到 68.72\% 和 76.54\%，
+对应最优跟踪误差 $|\bar d| = 3.7\,\text{mm}$、$|\bar \theta_e| = 0.0105\,\text{rad}$。
+初始阶段表现较弱的原因与仿真结论一致：
+GP 后验尚未充分收敛时，一阶传播会放大均值偏差对优化目标的影响；
+随后验逐步收敛，该缺陷得以弱化。
+ 
+\begin{table}[htbp]
+\centering
+\caption{在线非增量更新最优跟踪误差}
+\label{tab:online_best}
+\begin{tabular}{llccc}
+    \toprule
+    工况 & 方法 & 最优轮次
+        & $|\bar d|$ (mm) & $|\bar \theta_e|$ (rad) \\
+    \midrule
+    50ms 延迟 & 0-GP Non-T & 1 & 2.1 & 0.0047 \\
+    \multirow{2}{*}{单侧驱动力不足}
+              & 0-GP Non-T & 1 & 2.0 & 0.0070 \\
+              & 1-GP Non-T & 3 & 3.7 & 0.0105 \\
+    \bottomrule
+\end{tabular}
+\end{table}
+ 
+在上述非增量更新实验的基础上，还对增量诱导点扩充策略
+进行了初步探索，
+结合仿真中 Exp3 的结论，考察其在实车场景下的适应能力。
+在单侧驱动力不足工况、0-GP Non-T 配置下，两轮实验结果如
+\autoref{tab:update_add} 所示。
+ 
+\begin{table}[htbp]
+\centering
+\caption{在线增量更新结果（单侧驱动力不足，0-GP Non-T）}
+\label{tab:update_add}
+\begin{tabular}{ccccc}
+    \toprule
+    轮次 & $\Delta_v$ (\%) & $\Delta_\omega$ (\%)
+         & $|\bar d|$ (mm) & $|\bar \theta_e|$ (rad) \\
+    \midrule
+    1 & 58.16 & 67.06 & 5.7 & 0.021 \\
+    2 & 64.57 & 79.01 & 5.0 & 0.018 \\
+    \bottomrule
+\end{tabular}
+\end{table}
+ 
+与纯 非增量更新 策略相比，增量更新策略在初始轮次
+的预测精度较低，这与增量扩充引入新诱导点后 GP 后验初始方差较大有关，
+短期内降低了模型置信度，进而影响控制性能，
+这一现象与仿真实验中 Exp3 在收敛前期的短暂性能波动一致。
+随着轮次增加，预测精度呈明显上升趋势（$\Delta_\omega$ 从 67.06\% 升至 79.01\%），
+体现了增量扩充在扩大模型状态覆盖域方面的潜力。
+综合仿真与实车两组结果可以认为，纯 非增量更新 在任务重复、
+轨迹固定的短期场景中更为高效；增量更新策略则适合轨迹分布
+随任务持续变化的长期部署场景，能够在不重新训练的前提下逐步提升模型
+对新状态区域的表达能力。
