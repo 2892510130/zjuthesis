@@ -224,14 +224,14 @@ $k^i(x^*) = \sigma_f^2 \exp\!\left[-\frac{1}{2}\sum_{d=1}^{D} l_d^{-1}(x_d^i - x
 \begin{equation} \label{equ:transfer_model}
     \begin{aligned}
         x_{k+1} &= A_k \bar{x}_k + B_k u_k + C_k + \mu(\bar{z}_k) \\
-        \Sigma_{k+1}^x &= F_k \Sigma_{k}^x F_k^\top + \Sigma(\bar{z}_k)
+        \Sigma_{k+1}^x &= A_k \Sigma_{k}^x A_k^\top + \left.\frac{\partial \mu(z_k)}{\partial x}\right|_{z_k = \bar{z}_k}^\top
+         \Sigma_{k}^x \left.\frac{\partial \mu(z_k)}{\partial x}\right|_{z_k = \bar{z}_k} + \Sigma(\bar{z}_k)
     \end{aligned}
 \end{equation}
-其中\autoref{equ:var_transfer_gp}中的方差传递项被分解为两部分：
-$\Sigma(\bar{z}_k)$ 来自 GP 自身的预测不确定性，线性化雅可比矩阵
-$F_k = A_k + \left.\frac{\partial \mu(z_k)}{\partial x}\right|_{z_k = \bar{z}_k}$
-则将状态协方差 $\Sigma_k^x$ 沿名义动力学加 GP 均值的复合模型进行传播。
-其中
+方差传递项被分解为两部分：
+第一项来自名义模型，后两项来自高斯过程模型的方差传播，
+将状态协方差 $\Sigma_k^x$ 沿名义动力学加 GP 均值的复合模型进行传播。
+我们有
 \begin{equation}
     \Sigma(\bar{z}_k) = \begin{bmatrix}
         0 & 0 & 0 & 0 & \ldots & 0 \\
@@ -255,9 +255,9 @@ $F_k = A_k + \left.\frac{\partial \mu(z_k)}{\partial x}\right|_{z_k = \bar{z}_k}
     \mathrm{s.t.} \quad
     & \bar{x}_{k+i+1} = A_{k+i} \bar{x}_{k+i} + B_{k+i} u_{k+i} + C_{k+i} 
       + \mu(\bar{z}_{k+i}), \quad i = 0, \ldots, p-1 \\
-    & \Sigma_{k+i+1}^x = F_{k+i} \Sigma_{k+i}^x F_{k+i}^\top 
-      + \Sigma(\bar{z}_{k+i}), \quad i = 0, \ldots, p-1 \\
-    & \bar{x}_{k+i} \in \mathcal{X},\quad u_{k+i} \in \mathcal{U}, \quad i = 0, \ldots, p-1 \\
+    & \Sigma_{k+1+i}^x = A_k \Sigma_{k+i}^x A_k^\top + \left.\frac{\partial \mu(z_{k+i})}{\partial x}\right|_{z_k = \bar{z}_{k+i}}^\top
+         \Sigma_{k+i}^x \left.\frac{\partial \mu(z_{k+i})}{\partial x}\right|_{z_{k+i} = \bar{z}_{k+i}} + \Sigma(\bar{z}_{k+i}) \\
+    & \bar{x}_{k+i} \in \mathcal{X},\quad u_{k+i} \in \mathcal{U} \\
     & \bar{x}_{k+p} \in \mathcal{X}_f,\quad \bar{x}_k = x_k,\quad \Sigma_k^x = 0
 \end{aligned}
 \end{equation}
@@ -281,14 +281,16 @@ $F_k = A_k + \left.\frac{\partial \mu(z_k)}{\partial x}\right|_{z_k = \bar{z}_k}
         &= A_k^g x_k + B_k^g u_k + C_k^g
     \end{aligned}
 \end{equation}
-将上式代入\autoref{equ:transfer_model}，可得一阶近似下的状态转移方程：
+将上式代入\autoref{equ:transfer_model}，可得一阶近似下的状态转移方程和方差转移公式：
 \begin{equation} \label{equ:first_order_gp}
-    x_{k+1} = (A_k + A_k^g)\bar{x}_k + (B_k + B_k^g) u_k + C_k + C_k^g
+    \begin{aligned}
+        x_{k+1} &= (A_k + A_k^g)\bar{x}_k + (B_k + B_k^g) u_k + C_k + C_k^g \\
+        \Sigma_{k+1}^x &= (A_k + A_k^g) \Sigma_{k}^x (A_k + A_k^g)^\top + \Sigma(\bar{z}_k)
+    \end{aligned}
 \end{equation}
 
 本文将基于\autoref{equ:gp_mpc_cost}的方案记为\textbf{零阶 GP-MPC}，
-将状态转移方程替换为\autoref{equ:first_order_gp}的方案记为\textbf{一阶 GP-MPC}。
-两种方案共用同一套方差传递公式，仅在均值预测的近似阶次上有所区别。
+将状态转移方程和方差转移方程替换为\autoref{equ:first_order_gp}的方案记为\textbf{一阶 GP-MPC}。
 
 \section{方差感知与利用}
 \label{sec:variance_aware}
@@ -362,7 +364,7 @@ $L_{\mathrm{var}} \leq p$ 为方差惩罚所作用的预测步数。
 然而，GP 所提供的预测方差在机会约束（chance constraint）框架下具有重要的应用价值，
 本节对此展开讨论。
 
-假设对第 $k$ 步状态量存在如下硬约束：
+取一个简化模型，假设对第 $k$ 步状态量存在如下硬约束：
 \begin{equation}
     b_k^L \leq x_k \leq b_k^U, \qquad 
     x_k = A_{k-1} x_{k-1} + B_{k-1} u_{k-1} + C_{k-1}
@@ -418,7 +420,7 @@ GP 预测方差的有界性是上述稳定性结论成立的重要前提之一�
 \Require 跟踪轨迹 $\{x_{ref}, u_{ref}\}$，名义模型 $f_{\mathrm{nom}}$，初始状态 $x_0$，
          预测时域 $p$，GP 历史窗口长度 $T$，近似阶次 $\mathrm{order} \in \{0, 1\}$，
          方差感知权重 $\lambda_v, \lambda_w$，诱导点扩充阈值 $\epsilon$
-\State 初始化 $\mathcal{GP}_v$、$\mathcal{GP}_w$
+\State 初始化 $\mathcal{GP}_v$、$\mathcal{GP}_w$，$u_{\mathrm{init}} = \mathbf{0}$
 
 \For{ 控制时刻 $k = 0, 1, 2, \ldots$}
     \State 构造增广状态量$x_k$，得到预测时域内的参考轨迹$x^r \in \mathbb R^{4 (p+1)}, u^r\in \mathbb R^{2 p}$
@@ -431,8 +433,7 @@ GP 预测方差的有界性是上述稳定性结论成立的重要前提之一�
             \State 计算梯度 $A_{k+i}^g,\ B_{k+i}^g,\ C_{k+i}^g$，
                 令 $\tilde{A}_{k+i} = A_{k+i} + A_{k+i}^g,\ \tilde{B}_{k+i} = B_{k+i} + B_{k+i}^g,\ \tilde{C}_{k+i} = C_{k+i} + C_{k+i}^g$
         \EndIf
-        \State 计算 $F_{k+i} = A_{k+i} + \left.\frac{\partial \mu}{\partial x}\right|_{\bar{z}_{k+i}}$，
-            以 $\bar{x}_{k+i} = x_{k+i},\ \Sigma_{k+i}^x = 0$ 为初值沿时域传播均值与方差，填充$A_{ex}, B_{ex}, C_{ex}$，构建
+        \State 以 $\bar{x}_{k+i} = x_{k+i},\ \Sigma_{k+i}^x = 0$ 为初值沿时域传播均值与方差，填充$A_{ex}, B_{ex}, C_{ex}$，构建
             约束矩阵和约束向量$b^U, b^L$
     \EndFor
     \State 构造 $J$，或者计算 $G_x,\ G_u,\ G$，构造$J_{\mathrm{var}}$，
@@ -501,7 +502,7 @@ $x_{\mathrm{guess}}$、$u_{\mathrm{guess}}$，需要对其进行初始化以启�
 备实时可行性），所有GP推断与在线更新操作均由该C++库完成。MPC优化问题的求解则借助实车平台上部署的CasADi\cite{CasADi_2019}框架实现。
 
 在内存管理方面，Python原型实现中采用\texttt{vstack}与\texttt{hstack}等动态堆叠操作以处理诱导点扩充时新增的相关数据，每次扩充均涉及内
-存重新申请与数据全量复制，导致实际计算开销显著高于理论复杂度。针对这一问题，C++实现采用预分配策略：在初始化阶段为所有相关矩阵变量预留两倍
+存重新申请与数据全量复制，导致实际计算开销显著高于理论复杂度。针对这一问题，C++实现采用预分配策略：在初始化阶段为所有相关矩阵变量预留较大
 容量的连续内存空间，诱导点扩充时直接写入预留区域，从而彻底避免动态内存分配与数据搬运操作。当预留空间耗尽时，系统将拒绝后续扩充请求，以保障
 算法行为的确定性与内存安全性。
 
@@ -551,7 +552,7 @@ $M=40$作为默认配置，在精度与效率之间取得较好的平衡。
 控制增量约束均设为$|\Delta a|,\, |\Delta \delta| \leq 5$。
 
 两种故障工况的仿真设置如下。通信延迟工况：在控制回路中引入
-3步（100\,ms）的固定延迟，即控制器在第$k$步执行的实际为第$k-3$步
+2步（100\,ms）的固定延迟，即控制器在第$k$步执行的实际为第$k-2$步
 计算得到的控制指令，模拟实际系统中通信链路延迟导致的模型失配场景。
 单侧驱动力不足工况：通过对左右轮效率系数分别设置为
 $\eta_L = 0.95$、$\eta_R = 1.00$来模拟单侧执行器部分失效，
@@ -572,6 +573,9 @@ $\eta_L = 0.95$、$\eta_R = 1.00$来模拟单侧执行器部分失效，
     \tilde{\omega} = \omega + \varepsilon_\omega, \quad
     \varepsilon_v,\, \varepsilon_\omega \sim \mathcal{N}(0,\, 0.01^2).
 \end{equation}
+
+仿真实验中的参考跟踪路径由多段三阶贝塞尔曲线连接构成，形成类圆形的闭合路径，并保证了路径的连续性与光滑性。在此基础上，参考速度
+与加速度等运动参数首先通过S型曲线规划方法获得多段粗略轨迹，随后采用Zhang等\cite{Zhang_2019}的方法进行优化，从而生成满足连续性及最大曲率约束的可执行轨迹。
 
 \subsubsection{GP-MPC控制性能验证}
 
@@ -958,8 +962,6 @@ Exp3
         & 空载最大速度 & 1.5\,m/s \\
     满载最大速度 & 1.2\,m/s
         & 旋转直径     & 916\,mm \\
-    定位精度     & $\pm10$\,mm\,/\,$\pm1^{\circ}$
-        & 对接精度     & $\pm2$\,mm\,/\,$\pm0.2^{\circ}$ \\
     \bottomrule
 \end{tabular}
 \end{table}
@@ -980,7 +982,7 @@ GP 模型诱导点数初始为 $M=40$，历史状态窗口长度 $T=3$。
 模拟实际系统中通信链路延迟导致的模型失配场景。
 \textbf{单侧驱动力不足工况}则与仿真实验设置一致。
  
-AGV沿固定封闭参考轨迹行驶，
+AGV沿固定封闭参考轨迹行驶，轨迹是一段三阶贝塞尔曲线，速度曲线由S型速度曲线生成。由于实验场地空间限制，实验将在同一个轨迹上进行测试。
 以平均横向误差 $|\bar{d}|$ 与平均航向误差 $|\bar{\theta}_e|$ 衡量控制性能，
 以线速度 $v$ 和角速度 $\omega$ 的预测误差相较于名义模型的下降幅度衡量 GP
 学习质量，以线速度为例即
@@ -1071,22 +1073,6 @@ $\omega$ 方向（18\%\textasciitilde43\%），
 在预测精度方面，各方法对 $v$ 与 $\omega$ 的改善均分别超过 77\% 和 85\%，
 表明 GP 残差模型对该类系统性偏差具有极强的拟合能力。
  
-\textbf{综合对比与小结} \quad
-综合两组实验，可以得出以下结论。
- 
-1. GP 补偿的必要性：两种工况下，GP 残差补偿均显著压缩了名义模型
-的跟踪误差，在单侧驱动力不足工况下横向误差降幅超过 87\%，
-表明基于 GP 的残差学习是提升 MPC 鲁棒性的有效手段。
- 
-2. 零阶与一阶近似的比较：在控制精度层面，两者差距较小，
-0-GP (Non-T) 在延迟工况下横向误差（2.6\,mm）略优于 1-GP (Trained)（3.0\,mm），
-说明零阶近似在计算开销更低的前提下已能取得接近甚至更优的控制效果。
-与仿真结论一致，一阶近似对预测质量的提升并未等比例转化为控制性能的提升。
- 
-3. 超参数训练的边际效益：Trained 与 Non-Trained 变体之间的误差差异
-普遍在 1\,mm 量级，说明在实车场景中默认超参数已能提供足够好的先验，
-与在线更新机制配合时，超参数的离线训练对最终控制性能的边际贡献相对有限。
- 
 \subsubsection{GP-MPC 在线学习效果}
 \label{subsubsec:online_learning}
  
@@ -1175,7 +1161,20 @@ GP 后验尚未充分收敛时，一阶传播会放大均值偏差对优化目�
 这一现象与仿真实验中 Exp3 在收敛前期的短暂性能波动一致。
 随着轮次增加，预测精度呈明显上升趋势（$\Delta_\omega$ 从 67.06\% 升至 79.01\%），
 体现了增量扩充在扩大模型状态覆盖域方面的潜力。
-综合仿真与实车两组结果可以认为，纯 非增量更新 在任务重复、
-轨迹固定的短期场景中更为高效；增量更新策略则适合轨迹分布
-随任务持续变化的长期部署场景，能够在不重新训练的前提下逐步提升模型
-对新状态区域的表达能力。
+
+\subsubsection{实车实验小结}
+ 
+\begin{itemize}
+    \item \textbf{GP 补偿的必要性}：两种工况下，GP 残差补偿均显著压缩了名义模型
+的跟踪误差，在单侧驱动力不足工况下横向误差降幅超过 87\%，
+表明基于 GP 的残差学习是提升 MPC 鲁棒性的有效手段;
+    \item \textbf{零阶与一阶近似的比较}：在控制精度层面，两者差距较小，
+0-GP (Non-T) 在延迟工况下横向误差（2.6\,mm）略优于 1-GP (Trained)（3.0\,mm），
+说明零阶近似在计算开销更低的前提下已能取得接近甚至更优的控制效果。
+与仿真结论一致，一阶近似对预测质量的提升并未等比例转化为控制性能的提升;
+    \item \textbf{超参数训练的边际效益}：Trained 与 Non-Trained 变体之间的误差差异
+普遍在 1\,mm 量级，说明在实车场景中默认超参数已能提供足够好的先验，
+与在线更新机制配合时，超参数的离线训练对最终控制性能的边际贡献相对有限;
+    \item \textbf{非增量更新应用场景}：在任务重复、轨迹固定的短期场景中更为高效；
+    \item \textbf{增量更新策略应用场景}：适合轨迹分布随任务持续变化的长期部署场景，能够在不重新训练的前提下逐步提升模型对新状态区域的表达能力。
+\end{itemize}
