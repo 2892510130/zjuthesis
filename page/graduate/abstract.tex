@@ -1,69 +1,58 @@
 \cleardoublepage
 \chapternonum{摘要}
 
-随着智能交通系统与自动驾驶技术的快速发展，移动机器人轨迹跟踪控制面临日益严峻的挑战。在真实部署场景中，控制延迟、执行器异常及路面扰动等
-因素导致名义模型与真实系统之间存在不可忽视的失配，传统模型预测控制（MPC）方法在此类工况下性能显著下降。本文针对差速驱动移动机器人的轨
-迹跟踪控制问题，提出一种基于在线稀疏高斯过程回归与模型预测控制深度融合的自适应控制框架，主要工作如下：
+随着智能交通系统与自动驾驶技术的快速发展，移动机器人在复杂实际环境中的轨迹跟踪控制问题的重要性日益凸显。受控制输入时滞、执行器性能退化以及外界扰动等非理想因素影响，系
+统真实动力学与名义模型之间往往存在显著失配，从而导致传统模型预测控制（Model Predictive Control, MPC）方法的控制性能与鲁棒性显著下降。针对上述问题，本文以差
+速驱动移动机器人为研究对象，提出一种融合在线稀疏高斯过程回归（Gaussian Process Regression, GPR）与模型预测控制的自适应轨迹跟踪控制框架。主要工作如下：
 
 \begin{enumerate}
-    \item 设计了面向在线更新的稀疏高斯过程回归算法OSVGP，在变分推断框架下构建诱导点后验分布的递推更新机制，并提出增量式诱导点扩充策略，在计
-    算代价可控的前提下持续提升模型表达能力；
+    \item 提出一种面向在线更新的稀疏变分高斯过程回归方法（Online Sparse Variational Gaussian Process, OSVGP）。在变分推断框架下，构建诱导变量后验分布的
+    递推更新机制，并设计增量式诱导点扩展策略，在保证计算复杂度可控的前提下持续提升模型表达能力与逼近精度；
 
-    \item 提出基于在线稀疏高斯过程回归与模型预测控制深度融合的轨迹跟踪控制框架（GP-MPC），通过学习名义模型的残差动力学，实现对控制延迟、
-    执行器异常及环境扰动的在线自适应补偿；构建方差感知的MPC代价函数，将高斯过程输出的预测均值与不确定性信息引入状态预测与优化目标设计，使
-    控制器在不确定环境下朝更确定的方向决策，同时提升跟踪精度与鲁棒性；
+    \item 构建基于在线稀疏高斯过程回归与模型预测控制深度融合的轨迹跟踪控制框架（GP-MPC）。通过在线学习名义动力学模型的残差项，实现对控制延迟、执行器异常及环
+    境扰动的自适应补偿；同时，在MPC优化问题中引入不确定性感知机制，将高斯过程预测的均值与方差信息联合融入状态预测与代价函数设计，从而引导控制策略在不确定性较
+    低的方向上优化，提高系统的轨迹跟踪精度与整体鲁棒性；
 
-    \item 基于C++在资源受限嵌入式平台上实现了所提算法的高效部署，在缺乏高性能计算硬件支持的平台上验证了在线学习与预测控制协同实时运行的
-    可行性。
+    \item 面向资源受限嵌入式平台，基于C++实现所提方法的高效部署。在缺乏高性能计算资源支持的条件下，验证了在线学习与预测控制协同运行的实时性与工程可行性。
 \end{enumerate}
 
-在控制延迟与单侧执行力损失两类典型模型失配场景下开展仿真与实物实验。在回归性能方面，所提在线稀疏高斯过程回归算法与多种基线方法及标准高斯过
-程进行对比，在预测精度与计算效率上均展现出良好性能；在控制性能方面，与基准MPC控制器相比，所提GP-MPC框架在轨迹跟踪精度与模型在线补偿能力方
-面均取得显著提升，验证了该方法的有效性与可部署性。
+在控制时滞与单侧驱动力退化两类典型模型失配场景下开展仿真与实物实验。实验结果表明：在回归性能方面，所提出的在线稀疏高斯过程回归方法相较于多种基线方法及标准高斯
+过程，在预测精度与计算效率方面均表现出优越性能；在控制性能方面，与传统MPC控制器相比，所提出的GP-MPC框架在轨迹跟踪精度与模型失配在线补偿能力方面均取得显著提升，
+验证了该方法的有效性与可部署性。
 
-\textbf{关键词：} 模型预测控制；高斯过程回归；在线学习
+\textbf{关键词：} 模型预测控制；高斯过程回归；在线学习；移动机器人；自适应控制
 
 \cleardoublepage
 \chapternonum{Abstract}
 
-With the rapid development of intelligent transportation systems and autonomous driving 
-technology, trajectory tracking control for mobile robots faces increasingly demanding 
-challenges. In real-world deployment scenarios, factors such as control delays, actuator 
-faults, and road disturbances introduce non-negligible mismatches between the nominal model 
-and the true system, causing conventional Model Predictive Control (MPC) methods to suffer 
-significant performance degradation. This thesis addresses the trajectory tracking control 
-problem for differential-drive mobile robots and proposes an adaptive control framework that 
-tightly integrates online sparse Gaussian process regression with model predictive control. 
-The main contributions are as follows:
+With the rapid development of intelligent transportation systems and autonomous driving technologies, trajectory tracking control for mobile
+ robots in complex real-world environments has become increasingly critical. In practice, non-ideal factors such as control input delays, 
+ actuator performance degradation, and external disturbances often lead to significant mismatches between the true system dynamics and the 
+ nominal model, thereby degrading the performance and robustness of traditional Model Predictive Control (MPC) methods. To address these 
+ challenges, this paper considers a differential-drive mobile robot and proposes an adaptive trajectory tracking control framework that 
+ integrates online sparse Gaussian Process Regression (GPR) with MPC. The main contributions are summarized as follows:
 
 \begin{enumerate}
-    \item An online sparse Gaussian process regression algorithm OSVGP is developed, in which a 
-    recursive update mechanism for the variational posterior distribution over inducing points 
-    is derived under the variational inference framework. An incremental inducing point 
-    expansion strategy is further proposed to continuously improve model expressiveness while 
-    maintaining computational tractability.
+    \item An online sparse variational Gaussian process method (Online Sparse Variational Gaussian Process, OSVGP) is proposed. Within a 
+    variational inference framework, a recursive update scheme for the posterior distribution of inducing variables is developed. 
+    In addition, an incremental inducing point expansion strategy is designed to continuously improve model expressiveness and approximation 
+    accuracy while maintaining manageable computational complexity;
 
-    \item A trajectory tracking control framework (GP-MPC) is proposed by deeply integrating 
-    online sparse Gaussian process regression with model predictive control. By learning the 
-    residual dynamics of the nominal model, the framework achieves online adaptive 
-    compensation for control delays, actuator anomalies, and environmental disturbances. 
-    A variance-aware MPC cost function is further constructed by incorporating the predictive 
-    mean and uncertainty estimates produced by the Gaussian process into the state prediction 
-    and optimization objective design, enabling the controller to favor more certain decisions 
-    in uncertain environments and thereby improving both tracking accuracy and robustness.
+    \item A trajectory tracking control framework that tightly integrates online sparse GPR with MPC (GP-MPC) is developed. By learning the 
+    residual dynamics of the nominal model online, the proposed method achieves adaptive compensation for control delays, actuator faults, 
+    and environmental disturbances. Furthermore, an uncertainty-aware MPC formulation is introduced, where both the predictive mean and 
+    variance from the Gaussian process are incorporated into state prediction and cost function design, guiding the controller toward regions
+     with lower uncertainty and thereby improving tracking accuracy and overall robustness;
 
-    \item An efficient C++ implementation is developed and deployed on a resource-constrained 
-    embedded platform, demonstrating the feasibility of real-time co-execution of online 
-    learning and predictive control in the absence of high-performance computing hardware.
+    \item The proposed approach is efficiently implemented in C++ on a resource-constrained embedded platform. Real-time feasibility of 
+    the integrated online learning and predictive control scheme is validated without relying on high-performance computing resources, 
+    demonstrating its practical applicability.
 \end{enumerate}
 
-Simulation and real-world experiments are conducted under two representative model mismatch 
-scenarios: control delay and unilateral actuator power loss. In terms of regression 
-performance, the proposed online sparse Gaussian process regression algorithm is compared 
-against multiple baseline methods and standard Gaussian processes, demonstrating competitive 
-prediction accuracy and computational efficiency. In terms of control performance, the 
-proposed GP-MPC framework achieves significant improvements in trajectory tracking accuracy 
-and online model compensation capability over the baseline MPC controller, validating the 
-effectiveness and deployability of the proposed approach.
+Simulations and real-world experiments are conducted under two representative model mismatch scenarios, namely control delay and unilateral 
+actuation degradation. The results show that, in terms of regression performance, the proposed online sparse GPR method outperforms multiple 
+baseline methods as well as the standard Gaussian process in both prediction accuracy and computational efficiency. In terms of control 
+performance, compared with the conventional MPC controller, the proposed GP-MPC framework achieves significant improvements in trajectory 
+tracking accuracy and online compensation capability for model mismatch, thereby validating its effectiveness and deployability.
 
-\textbf{Keywords: } Model Predictive Control; Gaussian Process Regression; Online Learning
+\textbf{Keywords:} Model Predictive Control; Gaussian Process Regression; Online Learning; Mobile Robots; Adaptive Control

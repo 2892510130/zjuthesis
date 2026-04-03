@@ -3,7 +3,7 @@
 \section{差分车辆模型}
 
 论文的研究对象是差分驱动的无人车，因此有必要介绍相应的运动学模型。
-我们并不需要研究复杂的无人车的动力学模型，真实模型和运动学模型之间的残差动力学会被后文介绍的高斯过程回归模型替代。
+我们并不需要研究复杂的无人车动力学模型，真实模型和运动学模型之间的残差动力学会被后文介绍的高斯过程回归模型替代。
 在轨迹跟踪任务当中，我们一般采用Frenet坐标系而非全局坐标系，以便更自然地描述车辆相对于参考路径的偏差。
 
 \subsection{全局坐标系下的运动学模型}
@@ -110,10 +110,10 @@ $F_s = \{P_s; \mathbf{i}_s, \mathbf{j}_s\}$为依赖于曲线弧坐标$s$的坐�
         * & *  
     \end{bmatrix} = 
     \begin{bmatrix}
-        0, 0 \\
-        0, 0 \\
-        1, 0 \\
-        0, 1 \\
+        0 & 0 \\
+        0 & 0 \\
+        1 & 0 \\
+        0 & 1 \\
     \end{bmatrix}
 \end{equation}
 
@@ -204,14 +204,14 @@ Optimal Control Problem, FHOCP），得到最优控制序列后仅执行其第�
 \end{equation}
 
 其中 $p$ 为预测时域长度，$Q \succeq 0$、$R \succ 0$、$S \succeq 0$
-为权重矩阵；代价函数的四项分别对状态跟踪误差、控制偏差以及终端状态误差进行惩罚。
+为权重矩阵；代价函数的三项分别对状态跟踪误差、控制偏差以及终端状态误差进行惩罚。
 $\mathcal{X}$ 和 $\mathcal{U}$ 分别为状态约束集和控制输入约束集，$\mathcal{X}_f$ 为终端约束集，
 三者通常被定义为凸集以保证优化问题的可解性和稳定性。
 设最优控制序列为 $u^*_{k}, u^*_{k+1}, \ldots, u^*_{k+p-1}$，
 控制器仅施加 $u_k = u^*_k$，并在下一时刻重新求解\eqref{equ:mpc_cost}，
 由此形成不断前移的预测窗口，即RHC策略的核心体现。
 
-\subsection{QP问题紧缩}
+\subsection{QP问题的Condensing变换}
 
 在模型预测控制的领域中，凝结/紧缩（Condensing）是一种特定的数值优化技术，主要用于将带有
 时域约束的最优控制问题重新构造成一个更紧凑、规模更小的标准二次规划问题。在后文中我们需要对系统进行增广，
@@ -222,7 +222,7 @@ $\mathcal{X}$ 和 $\mathcal{U}$ 分别为状态约束集和控制输入约束集
 
 设$x_{ex} = [x_1, x_2, \dots, x_p]^\top$, $u_{ex} = [u_0, u_1, \dots, u_{p-1}]^\top$，并建立如下矩阵
 \begin{equation}
-    A_{ex} = \begin{bmatrix}A_0\\A_1A_0\\A_2A_1A_0\\ \vdots \\ \prod_{i=0}^{p-1}A_k\end{bmatrix}
+    A_{ex} = \begin{bmatrix}A_0\\A_1A_0\\A_2A_1A_0\\ \vdots \\ \prod_{i=0}^{p-1}A_i\end{bmatrix}
 \end{equation}
 
 \begin{equation}
@@ -233,7 +233,7 @@ $\mathcal{X}$ 和 $\mathcal{U}$ 分别为状态约束集和控制输入约束集
     C_{ex} = \begin{bmatrix}I&0&\ldots&\dots&0\\A_1&I&0&\ldots&0\\A_2A_1&A_2&I&\ldots&0\\\vdots&\vdots&\vdots&\ddots&0\\\prod_{i=1}^{p-1}A_i&\prod_{i=2}^{p-1}A_i&\ldots&A_{p-1}&I\end{bmatrix}\begin{bmatrix}C_0\\C_1\\ \vdots \\C_{p-2} \\ C_{p-1}\end{bmatrix}
 \end{equation}
 
-那么\autoref{equ:mpc_cost}中的代价函数经过线性化并替代可以写为\autoref{equ:condense}，
+\autoref{equ:mpc_cost}中的代价函数经过线性化并替代可以写为\autoref{equ:condense}，
 最终我们可以得到关于$u_{ex}$的式子，$x_{ex}$被浓缩掉了。
 那么对于一个典型QP问题的结构，$J = \frac{1}{2} x^\top H x + f^\top x$，黑塞矩阵$H = B_{ex}^TQB_{ex}+R$，
 线性倾向$f^\top = (A_{ex}x_0+ C_{ex}-x_{ref})^TQB_{ex}-U_{ref}R$。
@@ -255,7 +255,7 @@ $\mathcal{X}$ 和 $\mathcal{U}$ 分别为状态约束集和控制输入约束集
 
 实时迭代将每个采样周期的计算严格分为两个阶段 ：
 
-    准备阶段（Preparation Phase）：这一步可以看作是我们在上一轮讨论的condensing的实际应用场景。 
+    准备阶段（Preparation Phase）：该阶段可视为前述condensing方法在实时优化中的具体应用。 
     在这个阶段，控制器利用上一个时刻已知的信息（上一时刻的控制序列$u_{guess}$和状态轨迹预测$x_{guess}$）作为参考轨迹的猜测值，
     提前对未来的非线性模型进行线性化，
     并执行condensing操作，将非线性问题“凝结”成一个标准的、只关于控制增量的QP问题。关键在于，这一步是在等待当前最新的状

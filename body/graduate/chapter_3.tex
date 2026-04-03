@@ -44,7 +44,7 @@ $M \ll N$，对应的诱导变量为
 \end{equation}
 这是精确的表达式，接下来我们介绍几乎所有稀疏方法采取的近似假设：\textbf{给定$u$的条件下$f$和$f^*$是条件独立的}。
 \begin{equation}
-    p(f^*, f) \approxeq q(^*, f) = \int q(f^* | u) q(f | u) p(u) \mathrm{d}u
+    p(f^*, f) \approxeq q(f^*, f) = \int q(f^* | u) q(f | u) p(u) \mathrm{d}u
 \end{equation}
 “诱导变量”这一名称的由来是：由于$f$和 $f^*$只能通过$u$进行信息传递，因此$u$起到了诱导训练案例与测试案例之间依赖关系的作用。
 
@@ -172,7 +172,8 @@ KL散度。
         &= \mathbb E_{q(f, u)} \left [ \log p(y|f) \right ] - \text{KL} \left [q(u) || p(u) \right ]
     \end{aligned}
 \end{equation}
-显然，最大化边缘似然就是最小化$q(u)$和$p(u)$之间的KL散度。
+显然，最大化边缘似然等价于最大化ELBO，
+从而在拟合数据似然项与最小化$q(u)$与$p(u)$之间的KL散度之间取得平衡。
 
 其中证据变分下界ELBO就是：
 \begin{equation}
@@ -306,7 +307,10 @@ KL散度。
     \end{aligned}
 \end{equation}
 
-这跟我们推导的DTC的\autoref{equ:DTC_pred}一模一样，但是我们得到了ELBO得到的理论下界保证。同理在FITC的框架下，
+该结果在形式上与DTC预测分布\autoref{equ:DTC_pred}一致，但其来源于变分推断框架，
+因此对应的是具有ELBO最优性的变分稀疏高斯过程（VFE），
+而非基于先验近似的DTC方法。
+同理在FITC的框架下，
 诱导变量的变分分布是
 \begin{equation}
     \begin{aligned}
@@ -359,15 +363,15 @@ $(x_k, y_k)$，$p(y_k | u) = \mathcal N(K_{f_k u} K_{uu}^{-1}u, \sigma^2)$，$u$
     S_k = S_{k-1} - S_{k-1} K_{u u}^{-1} K_{u f_k} (\sigma^2 + K_{f_k u} K_{u u}^{-1} S_{k-1} K_{u u}^{-1} K_{u f_k})^{-1} K_{f_k u} K_{u u}^{-1} S_{k-1}
 \end{equation}
 
-这是一个贝叶斯更新步骤，我们可以将整个更新方案写成一个类似卡尔曼滤波的形式，定义$\phi_k = K_{f_k u} K_{uu}^{-1}$，那么
-$y_k = \phi_k u + \epsilon, \quad \epsilon \sim \mathcal N(0, \sigma^2)$
+这是一个贝叶斯更新步骤，我们可以将整个更新方案写成一个类似卡尔曼滤波的形式，定义$\Phi_k = K_{f_k u} K_{uu}^{-1}$，那么
+$y_k = \Phi_k u + \epsilon, \quad \epsilon \sim \mathcal N(0, \sigma^2)$
 \begin{equation}
     \begin{aligned}
         & r_k = y_k - \Phi_k m_{k-1} \\
         & s_k = \sigma^2 + \Phi_k S_{k-1} \Phi_k^T \\
         & K_k = S_{k-1} \Phi_k^T s_k^{-1} \\
         & m_k = m_{k-1} + K_k r_k \\
-        & S_k = S_{k-1} - K_k \phi_k S_{k-1}
+        & S_k = S_{k-1} - K_k \Phi_k S_{k-1}
     \end{aligned}
 \end{equation}
 第一项是残差，第二项是预测方差，第三项是增益。总结一下即为\autoref{alg:online_vsgp_update}，其总体计算复杂度为$\mathcal O(M^2)$。
@@ -389,21 +393,21 @@ $y_k = \phi_k u + \epsilon, \quad \epsilon \sim \mathcal N(0, \sigma^2)$
             \State $K_{f_k u} \gets [k(x_k, u_1), k(x_k, u_2), \ldots, k(x_k, u_M)]$ \Comment{$M$为诱导点个数}
             
             \State \textbf{步骤2}: 计算线性化观测矩阵
-            \State $\phi_k \gets K_{f_k u} K_{uu}^{-1}$ \Comment{将观测映射到诱导点空间}
+            \State $\Phi_k \gets K_{f_k u} K_{uu}^{-1}$ \Comment{将观测映射到诱导点空间}
             
             \State \textbf{步骤3}: 计算预测
-            \State $\hat{y}_k \gets \phi_k m_{k-1}$ \Comment{预测观测值}
+            \State $\hat{y}_k \gets \Phi_k m_{k-1}$ \Comment{预测观测值}
             \State $r_k \gets y_k - \hat{y}_k$ \Comment{残差（新息）}
             
             \State \textbf{步骤4}: 计算预测方差
-            \State $s_k \gets \sigma^2 + \phi_k S_{k-1} \phi_k^\top$ \Comment{标量预测方差}
+            \State $s_k \gets \sigma^2 + \Phi_k S_{k-1} \Phi_k^\top$ \Comment{标量预测方差}
             
             \State \textbf{步骤5}: 计算增益
-            \State $K_k \gets S_{k-1} \phi_k^\top s_k^{-1}$ \Comment{增益向量}
+            \State $K_k \gets S_{k-1} \Phi_k^\top s_k^{-1}$ \Comment{增益向量}
             
             \State \textbf{步骤6}: 更新后验分布
             \State $m_k \gets m_{k-1} + K_k r_k$ \Comment{更新均值}
-            \State $S_k \gets S_{k-1} - K_k \phi_k S_{k-1}$ \Comment{更新协方差}
+            \State $S_k \gets S_{k-1} - K_k \Phi_k S_{k-1}$ \Comment{更新协方差}
             
             \State \textbf{return} $m_k$, $S_k$
         \EndFunction
@@ -466,7 +470,7 @@ $S_u$的更新方法为
     (L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n})^\top S_{u_o} (L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n})
 \end{equation}
 
-这是由$u_n = K_{u_n u_o} K_{u_o u_o}^{-1} S_{u_o}$得来的。
+该更新形式来源于联合高斯分布的条件结构及块矩阵展开，可由\autoref{equ:mu_su_predictive}得到。
 
 但我们还需要知道何时加入一个新的诱导点，一个直觉上的做法是避免空间冗余，如果新诱导点跟旧诱导点在空间上相距较远则加入。
 但这种在欧氏空间下的距离度量并不是稀疏高斯所关心的，稀疏高斯过程利用诱导点构建了一个低维子空间$\mathcal H_U = \text{span}
