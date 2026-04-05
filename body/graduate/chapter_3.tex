@@ -148,7 +148,7 @@ $\Lambda = \mathrm{diag} [K_{ff} - Q_{ff} + \sigma^2 I]$.
 FITC则通过条件独立假设保留了局部不确定性，从而在保持计算效率的同时提升了模型的泛化能力。
 
 \subsection{高斯过程的变分推断}
-上文基于直接的假设推导了DTC和FITC的预测公式，这缺乏一定的理论保证，因此我们从变分推断的角度，推导出DTC的
+上文基于直接的假设推导了DTC和FITC的预测公式，这种推导方式缺乏严格的理论保证，因此我们从变分推断的角度，推导出DTC的
 公式（FITC同理），并基于此我们可以设计在线更新算法。
 
 设变分分布$q(u) = \mathcal N(m_u, S_u)$，变分后验为
@@ -367,11 +367,11 @@ $(x_k, y_k)$，$p(y_k | u) = \mathcal N(K_{f_k u} K_{uu}^{-1}u, \sigma^2)$，$u$
 $y_k = \Phi_k u + \epsilon, \quad \epsilon \sim \mathcal N(0, \sigma^2)$
 \begin{equation}
     \begin{aligned}
-        & r_k = y_k - \Phi_k m_{k-1} \\
-        & s_k = \sigma^2 + \Phi_k S_{k-1} \Phi_k^T \\
-        & K_k = S_{k-1} \Phi_k^T s_k^{-1} \\
-        & m_k = m_{k-1} + K_k r_k \\
-        & S_k = S_{k-1} - K_k \Phi_k S_{k-1}
+        & r_k = y_k - \Phi_k m_{k-1} &\quad \mathcal O(M^2) \\
+        & s_k = \sigma^2 + \Phi_k S_{k-1} \Phi_k^T &\quad \mathcal O(M^2) \\
+        & K_k = S_{k-1} \Phi_k^T s_k^{-1} &\quad \mathcal O(M^2) \\
+        & m_k = m_{k-1} + K_k r_k &\quad \mathcal O(M) \\
+        & S_k = S_{k-1} - K_k \Phi_k S_{k-1} &\quad \mathcal O(M^2)
     \end{aligned}
 \end{equation}
 第一项是残差，第二项是预测方差，第三项是增益。总结一下即为\autoref{alg:online_vsgp_update}，其总体计算复杂度为$\mathcal O(M^2)$。
@@ -427,7 +427,7 @@ $y_k = \Phi_k u + \epsilon, \quad \epsilon \sim \mathcal N(0, \sigma^2)$
 见区域的泛化能力与预测精度。
 
 观察\autoref{equ:mu_su_predictive}我们发现，增加诱导变量会导致标准稀疏高斯过程预测分布的$K_{u u}$， $K_{u f}$这两项变化，
-需要更新，从变分推断的角度则需要更新$K_{u u}$，$m_u$，$S_u$。
+需要更新，从变分推断的角度则需要更新$K_{u u}$，$m_u$，$S_u$，同样的我们基于DTC的变分形式进行推导。
 
 设新诱导点为$u_{n}$，原有诱导点为$u_{o}$，$K_{u f}$的更新比较简单：
 \begin{equation}
@@ -441,7 +441,7 @@ $K_{u u}$则并不会直接更新，而是更新对应的Cholesky分解矩阵$L_
 \begin{equation}
     C = L_{u_o u_o}^{-1} K_{u_o u_n}, \quad D = \sqrt{K_{u_n u_n} - C^\top C}
 \end{equation}
-则
+则Cholesky的秩1更新为
 \begin{equation}
     L_{u u} = \begin{bmatrix}
         L_{u_o u_o} & 0 \\
@@ -470,7 +470,7 @@ $S_u$的更新方法为
     (L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n})^\top S_{u_o} (L_{u_o u_o}^{-\top} L_{u_o u_o}^{-1} K_{u_o u_n})
 \end{equation}
 
-该更新形式来源于联合高斯分布的条件结构及块矩阵展开，可由\autoref{equ:mu_su_predictive}得到。
+该更新形式来源于联合高斯分布的矩阵展开和预测公\autoref{equ:mu_su_predictive}得到。
 
 但我们还需要知道何时加入一个新的诱导点，一个直觉上的做法是避免空间冗余，如果新诱导点跟旧诱导点在空间上相距较远则加入。
 但这种在欧氏空间下的距离度量并不是稀疏高斯所关心的，稀疏高斯过程利用诱导点构建了一个低维子空间$\mathcal H_U = \text{span}
@@ -478,11 +478,12 @@ $S_u$的更新方法为
 
 为此我们需要计算这种相关性，计算当前诱导点子空间解释了新诱导点多少比例的方差，即
 \begin{equation}
-    r(u_o) = \frac{K_{u_n u_n} - K_{u_n u_o} K_{u_o u_o}^{-1} K_{u_o u_n}}{K_{u_n u_n}}
+    r(u_n) = \frac{K_{u_n u_n} - K_{u_n u_o} K_{u_o u_o}^{-1} K_{u_o u_n}}{K_{u_n u_n}}
 \end{equation}
 当该值大于给定的阈值$\epsilon$时，就加入新诱导点。
 
-我们将上述增量更新方法记为\autoref{alg:add_new_inducing}，其计算复杂度仍为$\mathcal O(M^2)$ （变分法不需要扩充$k_{u f}$）。
+我们将上述增量更新方法记为\autoref{alg:add_new_inducing}，其计算复杂度仍为$\mathcal O(M^2)$ （变分法不需要扩充$k_{u f}$，Cholesky的秩1更新
+复杂度为$\mathcal O(M^2)$）。
 
 结合两个算法我们可以得出如下结论：OSVGP的计算复杂度为$\mathcal O(M^2)$，无论是增量还是非增量方案。
 
@@ -571,7 +572,7 @@ X = [z_1, z_2, \ldots, z_N]^\top \in \mathbb R^{N \times D},
 \frac{1}{2} \log (2\pi \sigma_i^2) + \frac{(y_i - \mu_i)^2}{2\sigma_i^2}
 \right],
 \end{equation}
-其中 $\sigma_i^2$ 为预测方差。NLL同时考虑预测误差与不确定性估计的合理性，值越小表示模型的概率预测性能越好。
+其中 $\sigma_i^2$ 为预测方差。NLL同时考虑预测误差与不确定性估计的合理性，值越小表示模型的概率预测性能越好，可为负值。
 
 综上，RMSE和MAE用于评估点预测精度，其中RMSE对大误差更敏感，而MAE具有更强的鲁棒性；NLL则进一步评估模型预测分布的质量，从而综合反映模型
 的预测性能与不确定性建模能力。
@@ -676,8 +677,7 @@ FITC 略优，这与 FITC 对角修正项能更好地保留训练点处的预测
 迭代，计算开销极低，代表了另一类轻量级在线学习策略。
 更重要的是，两种算法均能在实际部署中满足本系统20\,Hz的实时运行频率需求，因此具有直接的可比性。
 实验旨在从预测精度与计算效率两个维度评估OSVGP算法的在线学习性能。所有计时结果均为执行一百次取平均值。
-值得注意的是，本文中AGP的非增量更新算法并非真正的非增量更新，而只是说诱导点是非增量的，其算法还是会增量更新历史数据。
-AGP算法的遗忘参数~$\lambda$~设置为~$0.99$，诱导点扩充阈值参数~$\epsilon = 0.01$。
+AGP算法的遗忘参数~$\lambda$~设置为~$0.99$，诱导点扩充阈值参数统一定为~$\epsilon = 0.01$。
 
 \subsubsection{同域非增量更新}
 
@@ -709,8 +709,7 @@ AGP         & 1.1860 & 0.9857 & 4.2223   & 8.142  \\
 \end{table}
 
 在同域更新场景下，AGP算法凭借其滑动窗口遗忘机制，在三项指标上均取得压倒性优势，对函数缓慢漂移的适应
-能力最强，这是因为AGP还是会增量更新（即便诱导点没有增量更新）和遗忘历史数据，由于新旧数据数量一致，使得AGP算法能够完整替换
-所有历史数据，严格来说并不是非增量更新。
+能力最强。需要说明的是，AGP即便在诱导点固定时，仍会对历史数据进行增量累积并施加遗忘，否则将没有任何更新，因此与本文定义的`非增量更新'存在本质区别。
 
 OSVGP相较于Standard GP基线在RMSE、MAE和NLL上分别提升了48.8\%、48.9\%和53.7\%，并以6.958~ms的耗时在三种在线方法中运行
 最快。Bijl方法的预测精度虽优于Standard GP，但整体落后于OSVGP，说明本文所提的稀疏变分在线更新策略在同域场景下具有更强的后验修正能力。
@@ -880,14 +879,14 @@ RMSE（1.783）与MAE（1.126）均逊于OSVGP亦佐证了这一判断。
 工况 & 方法 & RMSE $\downarrow$ & MAE $\downarrow$ & NLL $\downarrow$ & 时间 (ms) \\
 \midrule
 \multirow{3}{*}{延迟工况}
- & OSVGP & \textbf{0.03899} & \textbf{0.02837} & \textbf{-1.5689} & \textbf{129.3} \\
- & Bijl  & 0.04125          & 0.03086          & -1.5500          & 199.5          \\
- & AGP   & 0.93364          & 0.41083          & 38.0038          & 156.7          \\
+ & OSVGP & \textbf{0.03899} & \textbf{0.02837} & \textbf{-1.5689} & \textbf{0.492} \\
+ & Bijl  & 0.04125          & 0.03086          & -1.5500          & 0.759          \\
+ & AGP   & 0.93364          & 0.41083          & 38.0038          & 0.596          \\
 \midrule
 \multirow{3}{*}{驱动力不足工况}
- & OSVGP & \textbf{0.03555} & \textbf{0.02759} & \textbf{-1.5646} & \textbf{118.7} \\
- & Bijl  & 0.04530          & 0.03766          & -1.4888          & 193.7          \\
- & AGP   & 0.03905          & 0.02994          & -1.0567          & 134.3          \\
+ & OSVGP & \textbf{0.03555} & \textbf{0.02759} & \textbf{-1.5646} & \textbf{0.490} \\
+ & Bijl  & 0.04530          & 0.03766          & -1.4888          & 0.800          \\
+ & AGP   & 0.03905          & 0.02994          & -1.0567          & 0.555          \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -895,14 +894,14 @@ RMSE（1.783）与MAE（1.126）均逊于OSVGP亦佐证了这一判断。
 从实验结果可以得出以下结论。
 
 \textbf{延迟工况：}OSVGP在RMSE、MAE和NLL三项指标上均优于Bijl方法，
-同时计算耗时（129.3~ms）较Bijl（199.5~ms）降低约35\%。AGP在本工况下
+同时计算耗时（0.492~ms）较Bijl（0.759~ms）降低约35\%。AGP在本工况下
 出现严重退化（RMSE~=~0.934，NLL~=~38.00），与前述跨域实验中的分析一致，
-其滑动窗口遗忘机制在数据分布发生较大偏移时容易导致历史知识的过度丢弃，
+其滑动窗口遗忘机制在数据分布发生较大偏移时容易导致历史知识的过度丢弃（延迟工况下新旧数据分布偏移程度相比另一工况更大），
 使模型在有限新数据条件下难以重建有效的后验表达。
 
 \textbf{驱动力不足工况：}三种方法均取得较好的更新效果，OSVGP仍以最低的
 RMSE（0.0356）和MAE（0.0276）位居首位，NLL同样最优（-1.565），且耗时
-最短（118.7~ms）。Bijl方法的精度略有下降，AGP在本工况下表现较延迟工况
+最短（0.490~ms）。Bijl方法的精度略有下降，AGP在本工况下表现较延迟工况
 有所恢复，但NLL（-1.057）仍逊于OSVGP与Bijl，说明其置信区间估计的
 可靠性相对较弱。
 

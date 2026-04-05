@@ -66,7 +66,7 @@ $F_s = \{P_s; \mathbf{i}_s, \mathbf{j}_s\}$为依赖于曲线弧坐标$s$的坐�
 \end{equation}
 
 本文中我们将名义模型的状态量设置为$x = (d, \theta_e, v, w)^\top$， 分别是横向误差、航向角误差、线速度和角速度。控制量
-为$u = (a, \delta)^\top$，分别是加速度和角加速度。通常我们直接将$P$设置为$P_m$，此时$(l_1, l_2) = (0, 0)$：
+为$u = (a, \delta)^\top$，分别是加速度和角加速度。通常我们可以直接将$P$设置为$P_m$，此时$(l_1, l_2) = (0, 0)$：
 \begin{equation}
     \dot{x} = 
     \begin{pmatrix}
@@ -303,7 +303,7 @@ $\mathcal{X}$ 和 $\mathcal{U}$ 分别为状态约束集和控制输入约束集
         \Delta u_{min} \\ \Delta  u_{min} \\ \vdots \\ \Delta u_{min}
     \end{bmatrix} 
     \leq 
-    \begin{bmatrix} \| \Delta u_{0} \| \\ \| \Delta  u_{1} \| \\ \vdots \\ \| \Delta u_{n-2} \|
+    \begin{bmatrix}  \Delta u_{0}  \\  \Delta  u_{1} \\ \vdots \\  \Delta u_{n-2} 
     \end{bmatrix} 
     \leq 
     \begin{bmatrix}\Delta  u_{max} \\ \Delta  u_{max}\\ \vdots \\ \Delta  u_{max}
@@ -355,7 +355,7 @@ $\mathcal{D} = \{ (x_i, y_i) \}_{i=1}^N$，$y_i = f(x_i) + \epsilon_i, \epsilon_
 GPR 假设函数值 $f(x)$ 在每个输入点 $x$ 上服从高斯分布，
 并通过协方差矩阵 $K$ 描述点间相关性。设$X = [x_1, x_2, \cdots, x_N]^\top \in \mathbb R ^{N \times D}, y = [y_1, y_2, \cdots, y_N]^\top$：
 \begin{equation}
-    f(X) = [f(x_1), f(x_2), \cdots, f(x_n)]^\top \sim \mathcal N(0, K)
+    f(X) = [f(x_1), f(x_2), \cdots, f(x_N)]^\top \sim \mathcal N(0, K)
 \end{equation}
 其中$K_{ij} = k(x_i, x_j)$。这样一来$y = f(X) + \epsilon, \epsilon \sim \mathcal N(0, \sigma_n^2 I)$，
 $y \sim \mathcal N(0, K + \sigma_n^2 I)$。
@@ -409,7 +409,8 @@ $y \sim \mathcal N(0, K + \sigma_n^2 I)$。
 
 常见的核函数包括：
 
-1）平方指数核（Squared Exponential Kernel，SE，又称RBF核）：
+\begin{enumerate}
+    \item 平方指数核（Squared Exponential Kernel，SE，又称RBF核）：
 
 \begin{equation}
     k(x,x') =
@@ -423,7 +424,7 @@ $y \sim \mathcal N(0, K + \sigma_n^2 I)$。
 其中 $\sigma_f^2$ 为信号方差，$l$ 为长度尺度参数。
 该核函数假设目标函数是无限可微的，因此能够生成非常平滑的函数。
 
-2）Matérn 核函数：
+    \item Matérn 核函数：
 
 \begin{equation}
 k(x,x') =
@@ -442,7 +443,7 @@ K_\nu
 当 $\nu=1/2$、$3/2$ 或 $5/2$ 时可得到常用的 Matérn 核形式。
 相比平方指数核，Matérn 核能够建模更粗糙的函数。
 
-3）周期核（Periodic Kernel）：
+    \item 周期核（Periodic Kernel）：
 
 \begin{equation}
 k(x,x') =
@@ -455,6 +456,7 @@ k(x,x') =
 
 其中 $p$ 为周期参数，
 适用于具有周期结构的数据。
+\end{enumerate}
 
 在实际应用中，还可以通过核函数加法或乘法构造更加复杂的核结构，
 以描述多种不同特性的组合。
@@ -498,12 +500,11 @@ K_y = K_{ff} + \sigma_n^2 I
 \end{equation}
 
 该目标函数由三项构成：第一项为数据拟合项，惩罚模型与训练观测不符的情况；第二项为复杂度惩罚项，防止过拟合；第三项为常数。
-这种自然的奥卡姆剃刀效应使得 GPR 在无需额外正则化的情况下即可进行模型选择。
+这种自然的奥卡姆剃刀效应使得 GPR 在无需额外正则化的情况下即可进行模型选择。该过程在平衡模型复杂度和数据拟合能力方面具有天然优势，
+从而避免过拟合问题。
 
 超参数优化通常通过基于梯度的方法（如 L-BFGS-B）对对数边缘似然求导并迭代求解，其中核矩阵对超参数的导数具有解析形式，
 便于高效计算。然而，该目标函数通常是非凸的，存在多个局部极值，因此实践中常采用多随机初始化策略以提升鲁棒性。
-该过程在平衡模型复杂度和数据拟合能力方面具有天然优势，
-从而避免过拟合问题。
 
 \subsection{数值优化方法}
 
